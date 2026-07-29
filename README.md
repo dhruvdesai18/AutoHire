@@ -83,6 +83,9 @@ The full pipeline above is built and working. It currently runs locally only —
 
 <img width="737" height="775" alt="Screenshot 2026-07-29 at 21 07 41" src="https://github.com/user-attachments/assets/6b18db80-6f74-416d-9d38-a5e8cd058d48" />
 
+<img width="440" height="755" alt="Screenshot 2026-07-29 at 22 06 23" src="https://github.com/user-attachments/assets/68b8f186-e239-43c3-9e4e-1b463dfab27a" />
+
+
 <img width="751" height="803" alt="Screenshot 2026-07-29 at 21 14 39" src="https://github.com/user-attachments/assets/628d167a-a959-48e9-aa6f-34c2c75f8eef" />
 
 <img width="698" height="779" alt="Screenshot 2026-07-29 at 21 14 27" src="https://github.com/user-attachments/assets/d46f2363-22e1-4b7b-a728-5d784c0cbea1" />
