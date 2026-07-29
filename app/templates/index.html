@@ -1,0 +1,156 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>AutoHire</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="wrap">
+    <h1>AutoHire</h1>
+    <p class="subtitle">Recruiter dashboard</p>
+
+    <div class="card">
+        <h2>Publish a Job</h2>
+        <input type="text" id="job-title" placeholder="Job title (e.g. Data Analyst)">
+        <textarea id="job-description" placeholder="Paste the job description here..." style="margin-top:8px;"></textarea>
+        <button id="btn-publish">Publish</button>
+        <div class="result" id="publish-result"></div>
+    </div>
+
+    <div class="card">
+        <h2>Published Jobs</h2>
+        <div id="jobs-list" class="result">Loading...</div>
+    </div>
+</div>
+
+<script>
+    function badge(text, kind) {
+        return `<span class="badge ${kind}">${text}</span>`;
+    }
+
+    const STATUS_LABELS = {
+        uploaded: "Uploaded",
+        parsed: "Parsed",
+        screening_passed: "Screening Passed",
+        rejected: "Rejected",
+        interview_prep_ready: "Prep Ready",
+        interview_link_sent: "Interview Sent",
+        interview_audio_uploaded: "Awaiting Evaluation",
+        advanced: "Advanced",
+    };
+
+    function applyUrl(jobId) {
+        return `${location.origin}/apply/${jobId}`;
+    }
+
+    async function loadJobs() {
+        const listEl = document.getElementById("jobs-list");
+        const res = await fetch("/jobs");
+        const data = await res.json();
+
+        if (!data.jobs.length) {
+            listEl.innerHTML = "No jobs published yet.";
+            return;
+        }
+
+        listEl.innerHTML = data.jobs.map(job => `
+            <div class="job-row" data-job-id="${job.job_id}">
+                <div class="job-title">${job.title}</div>
+                <div><a href="${applyUrl(job.job_id)}" target="_blank">${applyUrl(job.job_id)}</a></div>
+                <button class="link-btn view-candidates-btn" data-job-id="${job.job_id}">View Candidates</button>
+                <div class="candidates-container" id="candidates-${job.job_id}"></div>
+            </div>
+        `).join("");
+
+        document.querySelectorAll(".view-candidates-btn").forEach(btn => {
+            btn.addEventListener("click", () => loadCandidates(btn.dataset.jobId));
+        });
+    }
+
+    async function loadCandidates(jobId) {
+        const container = document.getElementById(`candidates-${jobId}`);
+        container.innerHTML = '<div class="spinner">Loading candidates...</div>';
+
+        const res = await fetch(`/jobs/${jobId}/candidates`);
+        const data = await res.json();
+
+        if (!data.candidates.length) {
+            container.innerHTML = '<div class="result">No applications yet.</div>';
+            return;
+        }
+
+        container.innerHTML = data.candidates.map(c => {
+            const statusLabel = STATUS_LABELS[c.status] || c.status;
+            const scoreLine = [
+                c.ats_score != null ? `ATS: ${c.ats_score}` : null,
+                c.conversation_score != null ? `Interview: ${c.conversation_score}` : null,
+            ].filter(Boolean).join(" · ");
+
+            return `
+                <div class="candidate-row" data-candidate-id="${c.candidate_id}">
+                    <div>${c.filename || c.candidate_id} <span class="status-pill">${statusLabel}</span></div>
+                    <div class="meta">${c.email || ""}${scoreLine ? " · " + scoreLine : ""}</div>
+                    ${c.status === "interview_audio_uploaded"
+                        ? `<button class="link-btn evaluate-btn" data-candidate-id="${c.candidate_id}">Evaluate</button>
+                           <div class="result eval-result" id="eval-${c.candidate_id}"></div>`
+                        : ""}
+                </div>
+            `;
+        }).join("");
+
+        container.querySelectorAll(".evaluate-btn").forEach(btn => {
+            btn.addEventListener("click", () => evaluateCandidate(btn.dataset.candidateId, jobId));
+        });
+    }
+
+    async function evaluateCandidate(candidateId, jobId) {
+        const resultEl = document.getElementById(`eval-${candidateId}`);
+        resultEl.innerHTML = '<div class="spinner">Diarizing and evaluating (this can take a minute)...</div>';
+
+        const res = await fetch(`/evaluate-interview/${candidateId}`, { method: "POST" });
+        const data = await res.json();
+        if (!res.ok) {
+            resultEl.innerHTML = `<div class="error">${data.error}</div>`;
+            return;
+        }
+
+        const advanced = data.status === "advanced";
+        resultEl.innerHTML = `
+            <div>Score: <strong>${data.conversation_score}</strong>/100 ${badge(advanced ? "ADVANCED" : "REJECTED", advanced ? "pass" : "fail")}</div>
+            <div style="margin-top:6px;">${data.summary}</div>
+        `;
+        loadCandidates(jobId);
+    }
+
+    document.getElementById("btn-publish").addEventListener("click", async () => {
+        const title = document.getElementById("job-title").value.trim();
+        const description = document.getElementById("job-description").value.trim();
+        const resultEl = document.getElementById("publish-result");
+        if (!title || !description) {
+            resultEl.innerHTML = '<div class="error">Enter a title and description first.</div>';
+            return;
+        }
+        resultEl.innerHTML = '<div class="spinner">Publishing...</div>';
+
+        const res = await fetch("/jobs", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title, description }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            resultEl.innerHTML = `<div class="error">${data.error}</div>`;
+            return;
+        }
+
+        document.getElementById("job-title").value = "";
+        document.getElementById("job-description").value = "";
+        resultEl.innerHTML = `Published. Application link: <a href="${applyUrl(data.job_id)}" target="_blank">${applyUrl(data.job_id)}</a>`;
+        loadJobs();
+    });
+
+    loadJobs();
+</script>
+</body>
+</html>

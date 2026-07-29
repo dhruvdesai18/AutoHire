@@ -1,0 +1,13 @@
+import os
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+GCP_PROJECT_ID = os.environ["GCP_PROJECT_ID"]
+GCP_REGION = os.environ["GCP_REGION"]
+GCS_BUCKET_NAME = os.environ["GCS_BUCKET_NAME"]
+DOCUMENT_AI_LOCATION = os.environ["DOCUMENT_AI_LOCATION"]
+DOCUMENT_AI_PROCESSOR_ID = os.environ["DOCUMENT_AI_PROCESSOR_ID"]
+ATS_SCORE_THRESHOLD = int(os.environ["ATS_SCORE_THRESHOLD"])
+INTERVIEW_SCORE_THRESHOLD = int(os.environ["INTERVIEW_SCORE_THRESHOLD"])

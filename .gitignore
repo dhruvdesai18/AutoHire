@@ -1,0 +1,25 @@
+# Secrets / credentials
+*.json
+!package.json
+.env
+*.key
+service-account*.json
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Uploaded/generated files (should live in GCS, not git)
+uploads/
+*.mp3
+*.m4a
+*.wav
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/

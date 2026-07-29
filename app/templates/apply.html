@@ -1,0 +1,61 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>AutoHire — Apply</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="wrap">
+    <h1>AutoHire</h1>
+    <p class="subtitle">Job application</p>
+
+    {% if error %}
+        <div class="step active">
+            <div class="error">{{ error }}</div>
+        </div>
+    {% else %}
+        <div class="step active">
+            <h2>{{ title }}</h2>
+            <p class="result">{{ description }}</p>
+        </div>
+
+        <div class="step active" id="step-apply">
+            <h2>Apply</h2>
+            <input type="file" id="resume-file" accept=".pdf">
+            <button id="btn-apply">Submit Application</button>
+            <div class="result" id="apply-result"></div>
+        </div>
+    {% endif %}
+</div>
+
+{% if not error %}
+<script>
+    document.getElementById("btn-apply").addEventListener("click", async () => {
+        const fileInput = document.getElementById("resume-file");
+        const resultEl = document.getElementById("apply-result");
+        const btn = document.getElementById("btn-apply");
+        if (!fileInput.files.length) {
+            resultEl.innerHTML = '<div class="error">Choose your resume first.</div>';
+            return;
+        }
+        btn.disabled = true;
+        resultEl.innerHTML = '<div class="spinner">Submitting your application (this can take a minute)...</div>';
+
+        const formData = new FormData();
+        formData.append("resume", fileInput.files[0]);
+        const res = await fetch("/apply/{{ job_id }}", { method: "POST", body: formData });
+        const data = await res.json();
+        if (!res.ok) {
+            resultEl.innerHTML = `<div class="error">${data.error}</div>`;
+            btn.disabled = false;
+            return;
+        }
+
+        document.getElementById("step-apply").innerHTML =
+            '<h2>Thanks for applying!</h2><p class="result">We\'ll review your application and be in touch by email.</p>';
+    });
+</script>
+{% endif %}
+</body>
+</html>

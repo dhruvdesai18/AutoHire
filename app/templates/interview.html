@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>AutoHire — Interview</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="wrap">
+    <h1>AutoHire</h1>
+    <p class="subtitle">Interview submission</p>
+
+    {% if error %}
+        <div class="step active">
+            <div class="error">{{ error }}</div>
+        </div>
+    {% elif submitted %}
+        <div class="step active">
+            <h2>Thanks — your answers have been submitted.</h2>
+            <p class="result">We'll be in touch with next steps.</p>
+        </div>
+    {% else %}
+        <div class="step active">
+            <h2>Your Interview Questions</h2>
+            <ol class="questions">
+                {% for q in questions %}
+                    <li>{{ q }}</li>
+                {% endfor %}
+            </ol>
+        </div>
+
+        <div class="step active">
+            <h2>Upload Your Answers</h2>
+            <p class="result">Record yourself answering all the questions above as a single audio file, then upload it below.</p>
+            <input type="file" id="audio-file" accept="audio/*">
+            <button id="btn-audio">Upload Audio</button>
+            <div class="result" id="audio-result"></div>
+        </div>
+    {% endif %}
+</div>
+
+{% if not error and not submitted %}
+<script>
+    document.getElementById("btn-audio").addEventListener("click", async () => {
+        const fileInput = document.getElementById("audio-file");
+        const resultEl = document.getElementById("audio-result");
+        if (!fileInput.files.length) {
+            resultEl.innerHTML = '<div class="error">Choose your recording first.</div>';
+            return;
+        }
+        resultEl.innerHTML = '<div class="spinner">Uploading...</div>';
+
+        const formData = new FormData();
+        formData.append("audio", fileInput.files[0]);
+        const res = await fetch("/upload/interview-audio/{{ candidate_id }}", {
+            method: "POST",
+            body: formData,
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            resultEl.innerHTML = `<div class="error">${data.error}</div>`;
+            return;
+        }
+
+        document.body.innerHTML = '';
+        location.reload();
+    });
+</script>
+{% endif %}
+</body>
+</html>
