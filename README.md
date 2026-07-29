@@ -76,3 +76,14 @@ app/
 ## Status
 
 The full pipeline above is built and working. It currently runs locally only — the links emailed to candidates point at `127.0.0.1`, so this hasn't yet been deployed anywhere publicly reachable (e.g. Cloud Run). That's the natural next step for turning this into something a real candidate outside this machine could use.
+
+
+## Demo
+<img width="731" height="711" alt="Screenshot 2026-07-29 at 21 07 31" src="https://github.com/user-attachments/assets/8e9ac88d-f2f9-4d6f-b336-0198f560dc96" />
+
+<img width="737" height="775" alt="Screenshot 2026-07-29 at 21 07 41" src="https://github.com/user-attachments/assets/6b18db80-6f74-416d-9d38-a5e8cd058d48" />
+
+<img width="751" height="803" alt="Screenshot 2026-07-29 at 21 14 39" src="https://github.com/user-attachments/assets/628d167a-a959-48e9-aa6f-34c2c75f8eef" />
+
+<img width="698" height="779" alt="Screenshot 2026-07-29 at 21 14 27" src="https://github.com/user-attachments/assets/d46f2363-22e1-4b7b-a728-5d784c0cbea1" />
+
