@@ -28,11 +28,15 @@ def _generate_json(system_instruction: str, user_text: str) -> dict:
 
 SCORING_SYSTEM_INSTRUCTION = """You are an ATS (Applicant Tracking System) resume screener.
 You are given a job description and a candidate's resume text.
+Extract the candidate's full name from the resume text, normalized to standard title
+case (e.g. "Dhruv Desai", not "DHRUV DESAI" or "dhruv desai"), even if the resume
+itself uses all-caps or other formatting.
 Score how well the candidate matches the job requirements on a scale of 0-100,
 considering relevant skills, experience, and education.
 
 Return only JSON in this exact structure, nothing else:
 {
+  "candidate_name": "candidate's full name as found in the resume",
   "score": <integer 0-100>,
   "matched_skills": ["...", "..."],
   "missing_skills": ["...", "..."],
@@ -65,23 +69,48 @@ def generate_interview_prep(resume_text: str, job_description: str) -> dict:
     return _generate_json(INTERVIEW_PREP_SYSTEM_INSTRUCTION, user_text)
 
 
-INTERVIEW_EVAL_SYSTEM_INSTRUCTION = """You are an Interview Conversation Analyzer.
-You are given an audio recording of a job interview and the list of questions the
-candidate was asked. Diarize the audio: identify each speaker and label them as
-"Interviewer" or "Candidate" based on context. Transcribe the conversation, using
-English letters only regardless of the spoken language.
+JD_FORMAT_SYSTEM_INSTRUCTION = """You are given a raw job description. Organize it into
+clear sections using only the content actually present in the text — do not invent or
+add any details that aren't there. Typical sections include an overview, responsibilities,
+requirements/qualifications, and anything else actually present (e.g. benefits, about the
+company). Use whatever sections genuinely fit the content; skip ones that don't apply.
 
-Evaluate the Candidate's conversation skills specifically: clarity of communication,
-confidence, relevance of answers to the questions asked, and professionalism.
-Score the candidate's conversation skills on a scale of 0-100.
-
-Write a summary of the interview in not more than 200 words.
+For each section, use "bullets" if the content is naturally a list (responsibilities,
+requirements, etc.), or "content" for a short narrative paragraph (e.g. an overview).
 
 Return only JSON in this exact structure, nothing else:
 {
-  "conversation": [
-    {"speaker": "Interviewer", "message": "..."},
-    {"speaker": "Candidate", "message": "..."}
+  "sections": [
+    {"heading": "...", "content": "..."},
+    {"heading": "...", "bullets": ["...", "..."]}
+  ]
+}
+"""
+
+
+def format_job_description(raw_description: str) -> dict:
+    return _generate_json(JD_FORMAT_SYSTEM_INSTRUCTION, raw_description)
+
+
+INTERVIEW_EVAL_SYSTEM_INSTRUCTION = """You are an Interview Assessment Analyzer.
+You are given a series of interview questions. For each question, you are given
+either the candidate's audio recording answering it, or a note that the candidate
+did not answer it (treat unanswered questions as a negative signal).
+
+For each answered question, transcribe what the candidate said, using English
+letters only regardless of the spoken language.
+
+Evaluate the candidate's communication skills across all their answers: clarity,
+confidence, relevance of each answer to its question, and professionalism.
+Score the candidate's overall communication skills on a scale of 0-100, factoring
+in any unanswered questions.
+
+Write a summary of the candidate's overall performance in not more than 200 words.
+
+Return only JSON in this exact structure, nothing else:
+{
+  "answers": [
+    {"question": "...", "transcript": "... or '(not answered)'", "notes": "brief note on this answer"}
   ],
   "summary": "...",
   "conversation_score": <integer 0-100>,
@@ -90,19 +119,21 @@ Return only JSON in this exact structure, nothing else:
 """
 
 
-def evaluate_interview(audio_bytes: bytes, mime_type: str, questions: list) -> dict:
-    questions_text = "\n".join(f"- {q}" for q in questions)
-    contents = [
-        types.Content(
-            role="user",
-            parts=[
-                types.Part.from_bytes(data=audio_bytes, mime_type=mime_type),
-                types.Part.from_text(
-                    text=f"Interview questions asked:\n{questions_text}"
-                ),
-            ],
-        )
-    ]
+def evaluate_interview(question_recordings: list) -> dict:
+    """question_recordings: list of {"question": str, "audio_bytes": bytes | None, "mime_type": str | None}"""
+    parts = []
+    for i, item in enumerate(question_recordings):
+        parts.append(types.Part.from_text(text=f"Question {i + 1}: {item['question']}"))
+        if item.get("audio_bytes"):
+            parts.append(
+                types.Part.from_bytes(
+                    data=item["audio_bytes"], mime_type=item["mime_type"]
+                )
+            )
+        else:
+            parts.append(types.Part.from_text(text="(candidate did not answer this question)"))
+
+    contents = [types.Content(role="user", parts=parts)]
     generate_content_config = types.GenerateContentConfig(
         temperature=0.2,
         system_instruction=[

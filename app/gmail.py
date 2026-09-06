@@ -1,4 +1,5 @@
 import base64
+import os
 from email.mime.text import MIMEText
 
 from google.auth.transport.requests import Request
@@ -8,7 +9,7 @@ from googleapiclient.discovery import build
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 CLIENT_SECRET_PATH = "client_secret.json"
-TOKEN_PATH = "token.json"
+TOKEN_PATH = os.environ.get("GMAIL_TOKEN_PATH", "token.json")
 
 
 def _get_credentials() -> Credentials:
@@ -37,6 +38,7 @@ def send_email(to_email: str, subject: str, body: str) -> None:
     message = MIMEText(body)
     message["to"] = to_email
     message["subject"] = subject
+    message["from"] = "AutoHire <hr.autohire@gmail.com>"
     raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
 
     service.users().messages().send(userId="me", body={"raw": raw}).execute()

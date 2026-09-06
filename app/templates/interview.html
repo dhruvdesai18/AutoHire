@@ -8,7 +8,7 @@
 <body>
 <div class="wrap">
     <h1>AutoHire</h1>
-    <p class="subtitle">Interview submission</p>
+    <p class="subtitle">Interview assessment</p>
 
     {% if error %}
         <div class="step active">
@@ -20,50 +20,189 @@
             <p class="result">We'll be in touch with next steps.</p>
         </div>
     {% else %}
-        <div class="step active">
-            <h2>Your Interview Questions</h2>
-            <ol class="questions">
-                {% for q in questions %}
-                    <li>{{ q }}</li>
-                {% endfor %}
-            </ol>
+        <div class="card" id="landing">
+            <h2>Assessment Instructions</h2>
+            <p class="result">
+                You have <strong>30 minutes</strong> to complete this assessment.
+                There are {{ questions|length }} questions, each testing your ability to
+                answer clearly and confidently. For each question, you can record your
+                answer directly in this page — you get up to 2 tries per question, and
+                90 seconds per recording. When the 30-minute timer runs out, whatever
+                you've recorded so far is submitted automatically.
+            </p>
+            <button id="btn-start">Start Assessment</button>
         </div>
 
-        <div class="step active">
-            <h2>Upload Your Answers</h2>
-            <p class="result">Record yourself answering all the questions above as a single audio file, then upload it below.</p>
-            <input type="file" id="audio-file" accept="audio/*">
-            <button id="btn-audio">Upload Audio</button>
-            <div class="result" id="audio-result"></div>
+        <div id="assessment-ui" style="display:none;">
+            <div class="card timer-bar">
+                <span>Time Remaining</span>
+                <span id="overall-timer">30:00</span>
+            </div>
+
+            <div id="questions-container"></div>
+
+            <div class="card">
+                <button id="btn-submit">Submit Assessment</button>
+                <div class="result" id="submit-result"></div>
+            </div>
         </div>
     {% endif %}
 </div>
 
 {% if not error and not submitted %}
 <script>
-    document.getElementById("btn-audio").addEventListener("click", async () => {
-        const fileInput = document.getElementById("audio-file");
-        const resultEl = document.getElementById("audio-result");
-        if (!fileInput.files.length) {
-            resultEl.innerHTML = '<div class="error">Choose your recording first.</div>';
+    const CANDIDATE_ID = {{ candidate_id|tojson }};
+    const QUESTIONS = {{ questions|tojson }};
+    const OVERALL_SECONDS = 30 * 60;
+    const PER_QUESTION_SECONDS = 90;
+    const MAX_ATTEMPTS = 2;
+
+    const state = QUESTIONS.map(() => ({
+        attemptsUsed: 0,
+        blob: null,
+        recording: false,
+        mediaRecorder: null,
+        chunks: [],
+        perQuestionRemaining: PER_QUESTION_SECONDS,
+        perQuestionInterval: null,
+    }));
+
+    let overallRemaining = OVERALL_SECONDS;
+    let overallInterval = null;
+    let submitted = false;
+
+    function formatTime(totalSeconds) {
+        const m = Math.floor(totalSeconds / 60);
+        const s = totalSeconds % 60;
+        return `${m}:${s.toString().padStart(2, "0")}`;
+    }
+
+    function renderQuestions() {
+        const container = document.getElementById("questions-container");
+        container.innerHTML = QUESTIONS.map((q, i) => `
+            <div class="card question-card" id="q-card-${i}">
+                <h2>Question ${i + 1}</h2>
+                <p class="result">${q}</p>
+                <div id="q-controls-${i}"></div>
+            </div>
+        `).join("");
+        QUESTIONS.forEach((_, i) => renderQuestionControls(i));
+    }
+
+    function renderQuestionControls(i) {
+        const s = state[i];
+        const controls = document.getElementById(`q-controls-${i}`);
+
+        if (s.recording) {
+            controls.innerHTML = `
+                <div class="rec-indicator">● Recording — ${formatTime(s.perQuestionRemaining)}</div>
+                <button class="link-btn" onclick="stopRecording(${i})">Stop Recording</button>
+            `;
             return;
         }
-        resultEl.innerHTML = '<div class="spinner">Uploading...</div>';
+
+        const attemptsLeft = MAX_ATTEMPTS - s.attemptsUsed;
+        let html = "";
+        if (s.blob) {
+            html += `<audio controls src="${URL.createObjectURL(s.blob)}"></audio>`;
+            html += `<div class="meta">Answer recorded.</div>`;
+        }
+        if (attemptsLeft > 0) {
+            html += `<button onclick="startRecording(${i})">${s.blob ? "Re-record" : "Record Answer"}</button>`;
+            html += `<div class="meta">${attemptsLeft} of ${MAX_ATTEMPTS} tries remaining</div>`;
+        } else {
+            html += `<div class="meta">No tries remaining.</div>`;
+        }
+        controls.innerHTML = html;
+    }
+
+    async function startRecording(i) {
+        const s = state[i];
+        let stream;
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch (e) {
+            alert("Microphone access is required to record your answer.");
+            return;
+        }
+
+        s.chunks = [];
+        s.mediaRecorder = new MediaRecorder(stream);
+        s.mediaRecorder.ondataavailable = (e) => s.chunks.push(e.data);
+        s.mediaRecorder.onstop = () => {
+            const mimeType = s.mediaRecorder.mimeType || "audio/webm";
+            s.blob = new Blob(s.chunks, { type: mimeType });
+            s.attemptsUsed += 1;
+            stream.getTracks().forEach((t) => t.stop());
+            renderQuestionControls(i);
+        };
+
+        s.mediaRecorder.start();
+        s.recording = true;
+        s.perQuestionRemaining = PER_QUESTION_SECONDS;
+        renderQuestionControls(i);
+
+        s.perQuestionInterval = setInterval(() => {
+            s.perQuestionRemaining -= 1;
+            if (s.perQuestionRemaining <= 0) {
+                stopRecording(i);
+                return;
+            }
+            renderQuestionControls(i);
+        }, 1000);
+    }
+
+    function stopRecording(i) {
+        const s = state[i];
+        if (!s.recording) return;
+        clearInterval(s.perQuestionInterval);
+        s.recording = false;
+        s.mediaRecorder.stop();
+    }
+
+    async function submitAssessment() {
+        if (submitted) return;
+        submitted = true;
+        clearInterval(overallInterval);
+        QUESTIONS.forEach((_, i) => { if (state[i].recording) stopRecording(i); });
+
+        const resultEl = document.getElementById("submit-result");
+        resultEl.innerHTML = '<div class="spinner">Submitting your answers...</div>';
 
         const formData = new FormData();
-        formData.append("audio", fileInput.files[0]);
-        const res = await fetch("/upload/interview-audio/{{ candidate_id }}", {
+        state.forEach((s, i) => {
+            if (s.blob) formData.append(`q${i}`, s.blob, `q${i}.webm`);
+        });
+
+        const res = await fetch(`/interview/${CANDIDATE_ID}/submit`, {
             method: "POST",
             body: formData,
         });
         const data = await res.json();
         if (!res.ok) {
             resultEl.innerHTML = `<div class="error">${data.error}</div>`;
+            submitted = false;
             return;
         }
 
-        document.body.innerHTML = '';
-        location.reload();
+        document.getElementById("assessment-ui").innerHTML =
+            '<div class="card"><h2>Thanks — your answers have been submitted.</h2><p class="result">We\'ll be in touch with next steps.</p></div>';
+    }
+
+    document.getElementById("btn-submit").addEventListener("click", submitAssessment);
+
+    document.getElementById("btn-start").addEventListener("click", () => {
+        document.getElementById("landing").style.display = "none";
+        document.getElementById("assessment-ui").style.display = "block";
+        renderQuestions();
+
+        overallInterval = setInterval(() => {
+            overallRemaining -= 1;
+            document.getElementById("overall-timer").textContent = formatTime(Math.max(overallRemaining, 0));
+            if (overallRemaining <= 0) {
+                submitAssessment();
+            }
+        }, 1000);
     });
 </script>
 {% endif %}

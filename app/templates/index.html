@@ -38,6 +38,7 @@
         interview_link_sent: "Interview Sent",
         interview_audio_uploaded: "Awaiting Evaluation",
         advanced: "Advanced",
+        expired: "Expired",
     };
 
     function applyUrl(jobId) {
@@ -86,11 +87,12 @@
                 c.ats_score != null ? `ATS: ${c.ats_score}` : null,
                 c.conversation_score != null ? `Interview: ${c.conversation_score}` : null,
             ].filter(Boolean).join(" · ");
+            const metaLine = [c.email, scoreLine].filter(Boolean).join(" · ");
 
             return `
                 <div class="candidate-row" data-candidate-id="${c.candidate_id}">
-                    <div>${c.filename || c.candidate_id} <span class="status-pill">${statusLabel}</span></div>
-                    <div class="meta">${c.email || ""}${scoreLine ? " · " + scoreLine : ""}</div>
+                    <div>${c.name || c.filename || c.candidate_id} <span class="status-pill">${statusLabel}</span> <a class="link-btn inline" href="/candidates/${c.candidate_id}/resume" target="_blank">View Resume</a></div>
+                    <div class="meta">${metaLine}</div>
                     ${c.status === "interview_audio_uploaded"
                         ? `<button class="link-btn evaluate-btn" data-candidate-id="${c.candidate_id}">Evaluate</button>
                            <div class="result eval-result" id="eval-${c.candidate_id}"></div>`

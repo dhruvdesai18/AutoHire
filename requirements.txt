@@ -6,3 +6,4 @@ google-cloud-documentai
 google-genai
 google-auth-oauthlib
 google-api-python-client
+gunicorn

@@ -17,7 +17,22 @@
     {% else %}
         <div class="step active">
             <h2>{{ title }}</h2>
-            <p class="result">{{ description }}</p>
+            {% if sections %}
+                {% for section in sections %}
+                    <h3 class="jd-heading">{{ section.heading }}</h3>
+                    {% if section.bullets %}
+                        <ul class="jd-bullets">
+                            {% for bullet in section.bullets %}
+                                <li>{{ bullet }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% elif section.content %}
+                        <p class="result">{{ section.content }}</p>
+                    {% endif %}
+                {% endfor %}
+            {% else %}
+                <p class="result">{{ description }}</p>
+            {% endif %}
         </div>
 
         <div class="step active" id="step-apply">
