@@ -86,6 +86,24 @@ def list_jobs():
     return jsonify({"jobs": jobs})
 
 
+@app.route("/jobs/<job_id>", methods=["DELETE"])
+@require_recruiter_auth
+def delete_job(job_id):
+    job_ref = db.collection("jobs").document(job_id)
+    if not job_ref.get().exists:
+        return jsonify({"error": "Job not found"}), 404
+
+    candidates = db.collection("candidates").where("job_id", "==", job_id).stream()
+    for c in candidates:
+        for prefix in (f"resumes/{c.id}/", f"interviews/{c.id}/"):
+            for blob in bucket.list_blobs(prefix=prefix):
+                blob.delete()
+        c.reference.delete()
+
+    job_ref.delete()
+    return jsonify({"status": "deleted"})
+
+
 @app.route("/jobs/<job_id>/candidates")
 @require_recruiter_auth
 def list_job_candidates(job_id):

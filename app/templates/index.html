@@ -29,16 +29,16 @@
         return `<span class="badge ${kind}">${text}</span>`;
     }
 
-    const STATUS_LABELS = {
-        uploaded: "Uploaded",
-        parsed: "Parsed",
-        screening_passed: "Screening Passed",
-        rejected: "Rejected",
-        interview_prep_ready: "Prep Ready",
-        interview_link_sent: "Interview Sent",
-        interview_audio_uploaded: "Awaiting Evaluation",
-        advanced: "Advanced",
-        expired: "Expired",
+    const STATUS_META = {
+        uploaded: { label: "Uploaded", kind: "st-progress" },
+        parsed: { label: "Parsed", kind: "st-progress" },
+        screening_passed: { label: "Screening Passed", kind: "st-waiting" },
+        rejected: { label: "Rejected", kind: "st-danger" },
+        interview_prep_ready: { label: "Prep Ready", kind: "st-waiting" },
+        interview_link_sent: { label: "Interview Sent", kind: "st-waiting" },
+        interview_audio_uploaded: { label: "Awaiting Evaluation", kind: "st-action" },
+        advanced: { label: "Advanced", kind: "st-success" },
+        expired: { label: "Expired", kind: "st-danger" },
     };
 
     function applyUrl(jobId) {
@@ -51,7 +51,7 @@
         const data = await res.json();
 
         if (!data.jobs.length) {
-            listEl.innerHTML = "No jobs published yet.";
+            listEl.innerHTML = '<div class="empty-state">No jobs published yet.</div>';
             return;
         }
 
@@ -60,6 +60,7 @@
                 <div class="job-title">${job.title}</div>
                 <div><a href="${applyUrl(job.job_id)}" target="_blank">${applyUrl(job.job_id)}</a></div>
                 <button class="link-btn view-candidates-btn" data-job-id="${job.job_id}">View Candidates</button>
+                <button class="link-btn danger delete-job-btn" data-job-id="${job.job_id}" data-job-title="${job.title}">Delete Job</button>
                 <div class="candidates-container" id="candidates-${job.job_id}"></div>
             </div>
         `).join("");
@@ -67,6 +68,23 @@
         document.querySelectorAll(".view-candidates-btn").forEach(btn => {
             btn.addEventListener("click", () => loadCandidates(btn.dataset.jobId));
         });
+
+        document.querySelectorAll(".delete-job-btn").forEach(btn => {
+            btn.addEventListener("click", () => deleteJob(btn.dataset.jobId, btn.dataset.jobTitle));
+        });
+    }
+
+    async function deleteJob(jobId, jobTitle) {
+        const confirmed = confirm(`Delete "${jobTitle}" and all of its candidates? This cannot be undone.`);
+        if (!confirmed) return;
+
+        const res = await fetch(`/jobs/${jobId}`, { method: "DELETE" });
+        if (!res.ok) {
+            const data = await res.json();
+            alert(data.error || "Failed to delete job.");
+            return;
+        }
+        loadJobs();
     }
 
     async function loadCandidates(jobId) {
@@ -77,12 +95,12 @@
         const data = await res.json();
 
         if (!data.candidates.length) {
-            container.innerHTML = '<div class="result">No applications yet.</div>';
+            container.innerHTML = '<div class="empty-state">No applications yet.</div>';
             return;
         }
 
         container.innerHTML = data.candidates.map(c => {
-            const statusLabel = STATUS_LABELS[c.status] || c.status;
+            const meta = STATUS_META[c.status] || { label: c.status, kind: "st-progress" };
             const scoreLine = [
                 c.ats_score != null ? `ATS: ${c.ats_score}` : null,
                 c.conversation_score != null ? `Interview: ${c.conversation_score}` : null,
@@ -91,7 +109,7 @@
 
             return `
                 <div class="candidate-row" data-candidate-id="${c.candidate_id}">
-                    <div>${c.name || c.filename || c.candidate_id} <span class="status-pill">${statusLabel}</span> <a class="link-btn inline" href="/candidates/${c.candidate_id}/resume" target="_blank">View Resume</a></div>
+                    <div>${c.name || c.filename || c.candidate_id} <span class="status-pill ${meta.kind}">${meta.label}</span> <a class="link-btn inline" href="/candidates/${c.candidate_id}/resume" target="_blank">View Resume</a></div>
                     <div class="meta">${metaLine}</div>
                     ${c.status === "interview_audio_uploaded"
                         ? `<button class="link-btn evaluate-btn" data-candidate-id="${c.candidate_id}">Evaluate</button>

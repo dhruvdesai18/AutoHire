@@ -199,6 +199,7 @@
         overallInterval = setInterval(() => {
             overallRemaining -= 1;
             document.getElementById("overall-timer").textContent = formatTime(Math.max(overallRemaining, 0));
+            document.querySelector(".timer-bar").classList.toggle("low", overallRemaining <= 300);
             if (overallRemaining <= 0) {
                 submitAssessment();
             }
