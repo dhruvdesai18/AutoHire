@@ -6,137 +6,374 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-<div class="wrap">
-    <h1>AutoHire</h1>
-    <p class="subtitle">Recruiter dashboard</p>
-
-    <div class="card">
-        <h2>Publish a Job</h2>
-        <input type="text" id="job-title" placeholder="Job title (e.g. Data Analyst)">
-        <textarea id="job-description" placeholder="Paste the job description here..." style="margin-top:8px;"></textarea>
-        <button id="btn-publish">Publish</button>
-        <div class="result" id="publish-result"></div>
+<div class="app-shell">
+    <div class="nav">
+        <span class="nav-brand">AutoHire</span>
+        <span style="font-size:12px;color:var(--color-neutral-600);margin-right:auto;">Recruiter workspace · protected</span>
+        <button class="btn btn-primary" id="btn-open-publish">Publish a role</button>
     </div>
 
-    <div class="card">
-        <h2>Published Jobs</h2>
-        <div id="jobs-list" class="result"></div>
+    <div class="dashboard-grid">
+        <div class="rail-col">
+            <div class="rail-head">
+                <span class="kick">Open roles</span>
+                <span class="kick num" style="color:var(--color-neutral-600);" id="job-count">—</span>
+            </div>
+            <div id="roles-list">
+                <div style="padding:8px 14px;">
+                    <div class="skeleton-line w-80"></div>
+                    <div class="skeleton-line w-60"></div>
+                </div>
+            </div>
+            <div style="padding:16px 14px;">
+                <button class="btn btn-primary btn-block" id="btn-open-publish-2">Publish a role</button>
+            </div>
+        </div>
+
+        <div class="main-col" id="main-col">
+            <div class="empty-state fade-in" style="padding:60px 0;">Select a role to view candidates.</div>
+        </div>
+
+        <div class="dossier-col" id="dossier-col">
+            <div class="empty-state fade-in" style="padding:60px 0;">No candidate selected.</div>
+        </div>
     </div>
 </div>
 
+<div id="publish-modal-mount"></div>
+
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 <script>
-    function badge(text, kind) {
-        return `<span class="badge ${kind}">${text}</span>`;
-    }
+    const ATS_THRESHOLD = {{ ats_threshold|tojson }};
+    const INTERVIEW_THRESHOLD = {{ interview_threshold|tojson }};
 
     const STATUS_META = {
-        uploaded: { label: "Uploaded", kind: "st-progress" },
-        parsed: { label: "Parsed", kind: "st-progress" },
-        screening_passed: { label: "Screening Passed", kind: "st-waiting" },
-        rejected: { label: "Rejected", kind: "st-danger" },
-        interview_prep_ready: { label: "Prep Ready", kind: "st-waiting" },
-        interview_link_sent: { label: "Interview Sent", kind: "st-waiting" },
-        interview_audio_uploaded: { label: "Awaiting Evaluation", kind: "st-action" },
-        advanced: { label: "Advanced", kind: "st-success" },
-        expired: { label: "Expired", kind: "st-danger" },
+        uploaded: { label: "Screening", tag: "tag-neutral" },
+        parsed: { label: "Screening", tag: "tag-neutral" },
+        screening_passed: { label: "Screening passed", tag: "tag-neutral" },
+        interview_prep_ready: { label: "Prep ready", tag: "tag-neutral" },
+        interview_link_sent: { label: "Assessment sent", tag: "tag-neutral" },
+        interview_audio_uploaded: { label: "Awaiting evaluation", tag: "tag-accent" },
+        advanced: { label: "Advanced", tag: "tag-outline" },
+        expired: { label: "Expired", tag: "tag-neutral" },
     };
 
-    function applyUrl(jobId) {
-        return `${location.origin}/apply/${jobId}`;
+    function statusMeta(c) {
+        if (c.status === "rejected") {
+            return c.conversation_score != null
+                ? { label: "Rejected", tag: "tag-neutral" }
+                : { label: "Screened out", tag: "tag-neutral" };
+        }
+        return STATUS_META[c.status] || { label: c.status, tag: "tag-neutral" };
     }
+
+    let jobs = [];
+    let selectedJobId = null;
+    let candidates = [];
+    let selectedCandidateId = null;
+
+    function applyUrl(jobId) { return `${location.origin}/apply/${jobId}`; }
+    function fmtDate(iso) {
+        if (!iso) return "";
+        const d = new Date(iso);
+        if (isNaN(d)) return "";
+        return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    }
+    function fmtTime(iso) {
+        if (!iso) return "";
+        const d = new Date(iso);
+        if (isNaN(d)) return "";
+        return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    }
+
+    // ---------- Roles rail ----------
 
     async function loadJobs() {
-        const listEl = document.getElementById("jobs-list");
-        listEl.innerHTML = `
-            <div class="skeleton-line w-40"></div>
-            <div class="skeleton-line w-80"></div>
-            <div class="skeleton-line w-60" style="margin-top:20px;"></div>
-        `;
-
         const res = await fetch("/jobs");
         const data = await res.json();
+        jobs = data.jobs;
+        document.getElementById("job-count").textContent = jobs.length;
 
-        if (!data.jobs.length) {
-            listEl.innerHTML = '<div class="empty-state fade-in">No jobs published yet.</div>';
+        const listEl = document.getElementById("roles-list");
+        if (!jobs.length) {
+            listEl.innerHTML = '<div class="empty-state fade-in" style="padding:20px 14px;">No roles yet.</div>';
+            renderMainCol();
+            renderDossier();
             return;
         }
 
-        listEl.innerHTML = data.jobs.map((job, i) => `
-            <div class="job-row fade-in" style="animation-delay:${i * 0.04}s" data-job-id="${job.job_id}">
-                <div class="job-title">${job.title}</div>
-                <div><a href="${applyUrl(job.job_id)}" target="_blank">${applyUrl(job.job_id)}</a></div>
-                <button class="link-btn view-candidates-btn" data-job-id="${job.job_id}">View Candidates</button>
-                <button class="link-btn danger delete-job-btn" data-job-id="${job.job_id}" data-job-title="${job.title}">Delete Job</button>
-                <div class="candidates-container" id="candidates-${job.job_id}"></div>
-            </div>
+        listEl.innerHTML = jobs.map((job) => `
+            <button class="jrow" aria-current="${job.job_id === selectedJobId}" data-job-id="${job.job_id}">
+                <span class="jtitle">${job.title}</span>
+                <span class="num" style="font-size:12px;color:var(--color-neutral-600);">${job.applied_count}</span>
+                <span class="jsub">${job.advanced_count} advanced${job.created_at ? " · " + fmtDate(job.created_at) : ""}</span>
+            </button>
         `).join("");
 
-        document.querySelectorAll(".view-candidates-btn").forEach(btn => {
-            btn.addEventListener("click", () => loadCandidates(btn.dataset.jobId));
+        listEl.querySelectorAll(".jrow").forEach((btn) => {
+            btn.addEventListener("click", () => selectJob(btn.dataset.jobId));
         });
 
-        document.querySelectorAll(".delete-job-btn").forEach(btn => {
-            btn.addEventListener("click", () => deleteJob(btn.dataset.jobId, btn.dataset.jobTitle));
+        if (!selectedJobId || !jobs.find((j) => j.job_id === selectedJobId)) {
+            selectJob(jobs[0].job_id);
+        }
+    }
+
+    async function selectJob(jobId) {
+        selectedJobId = jobId;
+        document.querySelectorAll(".jrow").forEach((btn) => {
+            btn.setAttribute("aria-current", String(btn.dataset.jobId === jobId));
+        });
+        selectedCandidateId = null;
+        await loadCandidates(jobId);
+    }
+
+    // ---------- Candidate table ----------
+
+    async function loadCandidates(jobId) {
+        renderMainCol(true);
+        const res = await fetch(`/jobs/${jobId}/candidates`);
+        const data = await res.json();
+        candidates = data.candidates;
+        if (!selectedCandidateId && candidates.length) selectedCandidateId = candidates[0].candidate_id;
+        renderMainCol();
+        renderDossier();
+    }
+
+    function renderMainCol(loading) {
+        const col = document.getElementById("main-col");
+        const job = jobs.find((j) => j.job_id === selectedJobId);
+        if (!job) {
+            col.innerHTML = '<div class="empty-state fade-in" style="padding:60px 0;">Select a role to view candidates.</div>';
+            return;
+        }
+
+        const head = `
+            <div class="kick">${job.created_at ? "Posted " + fmtDate(job.created_at) : "Open role"}</div>
+            <h2 style="font-size:34px;margin:8px 0 12px;">${job.title}</h2>
+            <div style="display:flex;align-items:center;gap:12px;font-size:12px;color:var(--color-neutral-700);border-bottom:1px solid var(--color-divider);padding-bottom:16px;">
+                <span style="font-size:11px;letter-spacing:.02em;word-break:break-all;">${applyUrl(job.job_id)}</span>
+                <button class="btn btn-ghost" style="font-size:12px;flex:none;" id="btn-copy-link">Copy link</button>
+                <button class="btn btn-ghost btn-danger" style="font-size:12px;flex:none;margin-left:auto;" id="btn-delete-job">Delete role</button>
+            </div>
+            <div class="stats-row">
+                <div class="stat"><div class="stat-n num">${job.applied_count}</div><div class="stat-label">Applied</div></div>
+                <div class="stat"><div class="stat-n num">${job.screened_out_count}</div><div class="stat-label">Screened out</div></div>
+                <div class="stat"><div class="stat-n num">${job.assessed_count}</div><div class="stat-label">Assessed</div></div>
+                <div class="stat"><div class="stat-n num">${job.advanced_count}</div><div class="stat-label">Advanced</div></div>
+            </div>
+        `;
+
+        if (loading) {
+            col.innerHTML = head + `
+                <div class="skeleton-line w-60"></div>
+                <div class="skeleton-line w-80" style="margin-top:14px;"></div>
+                <div class="skeleton-line w-40" style="margin-top:14px;"></div>
+            `;
+            return;
+        }
+
+        if (!candidates.length) {
+            col.innerHTML = head + '<div class="empty-state fade-in">No applications yet.</div>';
+        } else {
+            const rows = candidates.map((c) => {
+                const meta = statusMeta(c);
+                return `
+                    <tr class="crow" aria-current="${c.candidate_id === selectedCandidateId}" data-candidate-id="${c.candidate_id}">
+                        <td>
+                            <div class="cname">${c.name || c.filename || c.candidate_id}</div>
+                            <div class="cemail">${c.email || ""}</div>
+                        </td>
+                        <td><span class="tag ${meta.tag}">${meta.label}</span></td>
+                        <td class="num" style="text-align:right;font-size:15px;">${c.ats_score != null ? c.ats_score : "—"}</td>
+                        <td class="num" style="text-align:right;font-size:15px;color:var(--color-neutral-600);">${c.conversation_score != null ? c.conversation_score : "—"}</td>
+                    </tr>
+                `;
+            }).join("");
+
+            col.innerHTML = head + `
+                <table class="table">
+                    <thead><tr><th>Candidate</th><th>Stage</th><th style="text-align:right;">Résumé</th><th style="text-align:right;">Assessment</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+                <p style="font-size:11px;color:var(--color-neutral-600);margin-top:14px;">Scores are out of 100. Screening gate ${ATS_THRESHOLD} · assessment gate ${INTERVIEW_THRESHOLD}. Both applied automatically.</p>
+            `;
+        }
+
+        document.getElementById("btn-delete-job").addEventListener("click", deleteSelectedJob);
+        document.getElementById("btn-copy-link").addEventListener("click", () => {
+            navigator.clipboard.writeText(applyUrl(job.job_id));
+            showToast("Application link copied.", "success");
+        });
+        col.querySelectorAll(".crow").forEach((row) => {
+            row.addEventListener("click", () => {
+                selectedCandidateId = row.dataset.candidateId;
+                col.querySelectorAll(".crow").forEach((r) => r.setAttribute("aria-current", String(r === row)));
+                renderDossier();
+            });
         });
     }
 
-    async function deleteJob(jobId, jobTitle) {
-        const confirmed = confirm(`Delete "${jobTitle}" and all of its candidates? This cannot be undone.`);
+    async function deleteSelectedJob() {
+        const job = jobs.find((j) => j.job_id === selectedJobId);
+        if (!job) return;
+        const confirmed = confirm(`Delete "${job.title}" and all of its candidates? This cannot be undone.`);
         if (!confirmed) return;
 
-        const res = await fetch(`/jobs/${jobId}`, { method: "DELETE" });
+        const res = await fetch(`/jobs/${job.job_id}`, { method: "DELETE" });
         if (!res.ok) {
             const data = await res.json();
-            showToast(data.error || "Failed to delete job.", "error");
+            showToast(data.error || "Failed to delete role.", "error");
             return;
         }
-        showToast(`"${jobTitle}" deleted.`, "success");
+        showToast(`"${job.title}" deleted.`, "success");
+        selectedJobId = null;
+        candidates = [];
         loadJobs();
     }
 
-    async function loadCandidates(jobId) {
-        const container = document.getElementById(`candidates-${jobId}`);
-        container.innerHTML = `
-            <div class="skeleton-line w-60" style="margin-top:14px;"></div>
-            <div class="skeleton-line w-40"></div>
-        `;
+    // ---------- Dossier ----------
 
-        const res = await fetch(`/jobs/${jobId}/candidates`);
-        const data = await res.json();
+    function recommendation(c) {
+        if (c.status === "advanced") {
+            return { title: "Advance to founder interview", why: "Passed both the screening and assessment gates automatically." };
+        }
+        if (c.status === "interview_audio_uploaded") {
+            return { title: "Evaluate the assessment", why: "Answers are recorded and waiting to be scored." };
+        }
+        if (c.status === "interview_prep_ready" || c.status === "interview_link_sent") {
+            return { title: "Wait — assessment open", why: "Candidate has a 24-hour window to complete the recorded assessment." };
+        }
+        if (c.status === "expired") {
+            return { title: "Re-issue the link", why: "The 24-hour assessment window closed before a submission arrived." };
+        }
+        if (c.status === "rejected") {
+            return c.conversation_score != null
+                ? { title: "Rejected automatically", why: `Assessment scored ${c.conversation_score}, below the ${INTERVIEW_THRESHOLD} gate.` }
+                : { title: "Screened out automatically", why: `Score ${c.ats_score} against the ${ATS_THRESHOLD} gate.` };
+        }
+        return { title: "Awaiting screening", why: "Résumé received; scoring not yet complete." };
+    }
 
-        if (!data.candidates.length) {
-            container.innerHTML = '<div class="empty-state fade-in">No applications yet.</div>';
+    function decisionTrail(c) {
+        const steps = [];
+        steps.push({ time: fmtTime(c.created_at) || "—", label: "Application received", detail: "Résumé uploaded via the public link. Parsed to text.", by: "Automatic" });
+
+        if (c.ats_score != null) {
+            const passed = c.ats_score >= ATS_THRESHOLD;
+            steps.push({
+                time: fmtTime(c.created_at) || "—",
+                label: `Screening score ${c.ats_score}`,
+                detail: `${passed ? "Above" : "Below"} the ${ATS_THRESHOLD} gate.${passed ? "" : " Pipeline stopped."}`,
+                by: "Automatic · Gemini",
+            });
+        }
+
+        if (c.link_sent_at) {
+            steps.push({ time: fmtTime(c.link_sent_at), label: "Shortlist email sent", detail: "Questions written from the résumé. 24-hour window opened.", by: "Automatic · Gmail" });
+        }
+
+        if (c.status === "expired") {
+            steps.push({ time: "—", label: "Link expired", detail: "No recordings received. Status set to expired.", by: "Automatic" });
+        }
+
+        if (["interview_audio_uploaded", "advanced"].includes(c.status) || (c.status === "rejected" && c.conversation_score != null)) {
+            steps.push({ time: "—", label: "Assessment completed", detail: "Answers recorded and submitted.", by: "Candidate" });
+        }
+
+        if (c.conversation_score != null) {
+            const passed = c.conversation_score >= INTERVIEW_THRESHOLD;
+            steps.push({
+                time: "—",
+                label: `Assessment score ${c.conversation_score}`,
+                detail: `${passed ? "Above" : "Below"} the ${INTERVIEW_THRESHOLD} gate. Status set to ${passed ? "advanced" : "rejected"}.`,
+                by: "Automatic · Gemini",
+            });
+        }
+
+        return steps;
+    }
+
+    function skillTags(list, kind) {
+        if (!list || !list.length) return `<span class="meta">None recorded.</span>`;
+        return list.map((s) => `<span class="tag ${kind}">${s}</span>`).join(" ");
+    }
+
+    function renderDossier() {
+        const mount = document.getElementById("dossier-col");
+        const c = candidates.find((x) => x.candidate_id === selectedCandidateId);
+        if (!c) {
+            mount.innerHTML = '<div class="empty-state fade-in" style="padding:60px 0;">No candidate selected.</div>';
             return;
         }
 
-        container.innerHTML = data.candidates.map((c, i) => {
-            const meta = STATUS_META[c.status] || { label: c.status, kind: "st-progress" };
-            const scoreLine = [
-                c.ats_score != null ? `ATS: ${c.ats_score}` : null,
-                c.conversation_score != null ? `Interview: ${c.conversation_score}` : null,
-            ].filter(Boolean).join(" · ");
-            const metaLine = [c.email, scoreLine].filter(Boolean).join(" · ");
+        const meta = statusMeta(c);
+        const summary = c.interview_summary || c.ats_reasoning || "Not yet available.";
+        const rec = recommendation(c);
+        const trail = decisionTrail(c);
 
-            return `
-                <div class="candidate-row fade-in" style="animation-delay:${i * 0.04}s" data-candidate-id="${c.candidate_id}">
-                    <div>${c.name || c.filename || c.candidate_id} <span class="status-pill ${meta.kind}">${meta.label}</span> <a class="link-btn inline" href="/candidates/${c.candidate_id}/resume" target="_blank">View Resume</a></div>
-                    <div class="meta">${metaLine}</div>
-                    ${c.status === "interview_audio_uploaded"
-                        ? `<button class="link-btn evaluate-btn" data-candidate-id="${c.candidate_id}">Evaluate</button>
-                           <div class="result eval-result" id="eval-${c.candidate_id}"></div>`
-                        : ""}
+        mount.innerHTML = `
+            <div class="kick fade-in">Dossier</div>
+            <h3 style="font-size:27px;font-weight:400;margin:8px 0 4px;" class="fade-in">${c.name || c.filename || c.candidate_id}</h3>
+            <div style="font-size:12px;color:var(--color-neutral-600);" class="fade-in">${c.email || ""} · <a href="/candidates/${c.candidate_id}/resume" target="_blank">View résumé</a></div>
+
+            <div class="dossier-scores fade-in">
+                <div class="score-block">
+                    <div class="score-n num">${c.ats_score != null ? c.ats_score : "—"}</div>
+                    <div class="score-label">Résumé match</div>
                 </div>
-            `;
-        }).join("");
+                <div class="score-block">
+                    <div class="score-n num" style="${c.conversation_score == null ? "color:var(--color-neutral-400);" : ""}">${c.conversation_score != null ? c.conversation_score : "—"}</div>
+                    <div class="score-label">Assessment</div>
+                </div>
+                <div style="margin-left:auto;"><span class="tag ${meta.tag}">${meta.label}</span></div>
+            </div>
 
-        container.querySelectorAll(".evaluate-btn").forEach(btn => {
-            btn.addEventListener("click", () => evaluateCandidate(btn.dataset.candidateId, jobId));
-        });
+            <hr class="hr">
+
+            <div class="kick" style="margin-bottom:9px;">Matched — ${(c.ats_matched_skills || []).length} of ${(c.ats_matched_skills || []).length + (c.ats_missing_skills || []).length}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">${skillTags(c.ats_matched_skills, "tag-outline")}</div>
+            <div class="kick" style="margin:18px 0 9px;color:var(--color-neutral-600);">Missing</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">${skillTags(c.ats_missing_skills, "tag-neutral")}</div>
+
+            <hr class="hr">
+
+            <div class="kick" style="margin-bottom:9px;">Summary</div>
+            <p style="font-size:13.5px;line-height:1.7;text-align:justify;">${summary}</p>
+
+            <div class="rec-box">
+                <div class="kick" style="margin-bottom:5px;">Recommendation</div>
+                <div class="rec-title">${rec.title}</div>
+                <div class="rec-why">${rec.why}</div>
+            </div>
+
+            ${c.status === "interview_audio_uploaded" ? `
+                <div style="margin-top:16px;">
+                    <button class="btn btn-primary btn-block" id="btn-evaluate">Evaluate assessment</button>
+                    <div class="result" id="eval-result"></div>
+                </div>
+            ` : ""}
+
+            <hr class="hr">
+            <div class="kick" style="margin-bottom:12px;">Decision trail</div>
+            ${trail.map((t) => `
+                <div class="trail-row">
+                    <div class="trail-time num">${t.time}</div>
+                    <div class="trail-body">
+                        <div class="trail-label">${t.label}</div>
+                        <div class="trail-detail">${t.detail}</div>
+                        <div class="trail-by ${t.by === "Candidate" ? "candidate" : "automatic"}">${t.by}</div>
+                    </div>
+                </div>
+            `).join("")}
+        `;
+
+        const evalBtn = document.getElementById("btn-evaluate");
+        if (evalBtn) evalBtn.addEventListener("click", () => evaluateCandidate(c.candidate_id));
     }
 
-    async function evaluateCandidate(candidateId, jobId) {
-        const resultEl = document.getElementById(`eval-${candidateId}`);
+    async function evaluateCandidate(candidateId) {
+        const resultEl = document.getElementById("eval-result");
         resultEl.innerHTML = '<div class="spinner">Diarizing and evaluating (this can take a minute)...</div>';
 
         const res = await fetch(`/evaluate-interview/${candidateId}`, { method: "POST" });
@@ -148,15 +385,40 @@
         }
 
         const advanced = data.status === "advanced";
-        resultEl.innerHTML = `
-            <div class="fade-in">Score: <strong>${data.conversation_score}</strong>/100 ${badge(advanced ? "ADVANCED" : "REJECTED", advanced ? "pass" : "fail")}</div>
-            <div class="fade-in" style="margin-top:6px;">${data.summary}</div>
-        `;
         showToast(advanced ? "Candidate advanced!" : "Candidate rejected.", advanced ? "success" : "info");
-        loadCandidates(jobId);
+        await loadCandidates(selectedJobId);
     }
 
-    document.getElementById("btn-publish").addEventListener("click", async () => {
+    // ---------- Publish role dialog ----------
+
+    function openPublishModal() {
+        document.getElementById("publish-modal-mount").innerHTML = `
+            <div class="dialog-backdrop" id="publish-backdrop">
+                <div class="dialog fade-in">
+                    <div class="dialog-title">Publish a role</div>
+                    <div class="dialog-body">The description is reformatted into sections for the candidate-facing page, then a shareable application link is issued.</div>
+                    <div class="field"><label>Role title</label><input class="input" id="job-title" placeholder="e.g. Data Analyst"></div>
+                    <div class="field"><label>Description</label><textarea class="input" id="job-description" placeholder="Paste the job description…"></textarea></div>
+                    <div class="result" id="publish-result"></div>
+                    <div class="dialog-actions">
+                        <button class="btn btn-secondary" id="btn-cancel-publish">Cancel</button>
+                        <button class="btn btn-primary" id="btn-publish">Publish &amp; get link</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.getElementById("publish-backdrop").addEventListener("click", (e) => {
+            if (e.target.id === "publish-backdrop") closePublishModal();
+        });
+        document.getElementById("btn-cancel-publish").addEventListener("click", closePublishModal);
+        document.getElementById("btn-publish").addEventListener("click", submitPublish);
+    }
+
+    function closePublishModal() {
+        document.getElementById("publish-modal-mount").innerHTML = "";
+    }
+
+    async function submitPublish() {
         const title = document.getElementById("job-title").value.trim();
         const description = document.getElementById("job-description").value.trim();
         const resultEl = document.getElementById("publish-result");
@@ -174,16 +436,18 @@
         const data = await res.json();
         if (!res.ok) {
             resultEl.innerHTML = `<div class="error">${data.error}</div>`;
-            showToast(data.error || "Failed to publish job.", "error");
+            showToast(data.error || "Failed to publish role.", "error");
             return;
         }
 
-        document.getElementById("job-title").value = "";
-        document.getElementById("job-description").value = "";
-        resultEl.innerHTML = `<span class="fade-in">Published. Application link: <a href="${applyUrl(data.job_id)}" target="_blank">${applyUrl(data.job_id)}</a></span>`;
-        showToast("Job published!", "success");
+        showToast("Role published!", "success");
+        closePublishModal();
+        selectedJobId = data.job_id;
         loadJobs();
-    });
+    }
+
+    document.getElementById("btn-open-publish").addEventListener("click", openPublishModal);
+    document.getElementById("btn-open-publish-2").addEventListener("click", openPublishModal);
 
     loadJobs();
 </script>

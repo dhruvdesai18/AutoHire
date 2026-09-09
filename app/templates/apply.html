@@ -7,39 +7,41 @@
 </head>
 <body>
 <div class="wrap">
-    <h1>AutoHire</h1>
-    <p class="subtitle">Job application</p>
+    <div style="font-family:var(--font-heading);font-size:15px;font-weight:600;letter-spacing:.02em;">AutoHire</div>
+    <hr class="hr" style="margin:12px 0 18px;">
 
     {% if error %}
-        <div class="step active">
-            <div class="error">{{ error }}</div>
-        </div>
+        <div class="error">{{ error }}</div>
     {% else %}
-        <div class="step active">
-            <h2>{{ title }}</h2>
+        <div id="step-apply-form">
+            <div class="kick">{{ (posted + " · remote") if posted else "" }}</div>
+            <h3 style="font-size:29px;font-weight:400;margin:8px 0 16px;">{{ title }}</h3>
+
             {% if sections %}
                 {% for section in sections %}
-                    <h3 class="jd-heading">{{ section.heading }}</h3>
-                    {% if section.bullets %}
-                        <ul class="jd-bullets">
+                    <div class="jd-section">
+                        <div class="jd-section-heading">{{ section.heading }}</div>
+                        {% if section.bullets %}
                             {% for bullet in section.bullets %}
-                                <li>{{ bullet }}</li>
+                                <div class="jd-line"><span class="dot">·</span><span>{{ bullet }}</span></div>
                             {% endfor %}
-                        </ul>
-                    {% elif section.content %}
-                        <p class="result">{{ section.content }}</p>
-                    {% endif %}
+                        {% elif section.content %}
+                            <p class="result" style="margin-top:0;">{{ section.content }}</p>
+                        {% endif %}
+                    </div>
                 {% endfor %}
             {% else %}
-                <p class="result">{{ description }}</p>
+                <p class="result" style="margin-top:0;">{{ description }}</p>
             {% endif %}
-        </div>
 
-        <div class="step active" id="step-apply">
-            <h2>Apply</h2>
-            <input type="file" id="resume-file" accept=".pdf">
-            <button id="btn-apply">Submit Application</button>
-            <div class="result" id="apply-result"></div>
+            <div class="card" style="margin-top:24px;">
+                <div class="card-kicker">Apply</div>
+                <p class="card-body">Your résumé is all we need. No forms, no account.</p>
+                <input type="file" id="resume-file" accept=".pdf" style="position:absolute;width:1px;height:1px;opacity:0;">
+                <button id="btn-pick-file" class="btn btn-secondary btn-block" style="justify-content:flex-start;min-height:46px;" type="button">Choose your résumé (PDF)</button>
+                <button id="btn-apply" class="btn btn-primary btn-block" style="min-height:46px;">Submit application</button>
+                <div class="result" id="apply-result"></div>
+            </div>
         </div>
     {% endif %}
 </div>
@@ -47,8 +49,14 @@
 {% if not error %}
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 <script>
+    const fileInput = document.getElementById("resume-file");
+    const pickBtn = document.getElementById("btn-pick-file");
+    pickBtn.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", () => {
+        pickBtn.textContent = fileInput.files.length ? fileInput.files[0].name : "Choose your résumé (PDF)";
+    });
+
     document.getElementById("btn-apply").addEventListener("click", async () => {
-        const fileInput = document.getElementById("resume-file");
         const resultEl = document.getElementById("apply-result");
         const btn = document.getElementById("btn-apply");
         if (!fileInput.files.length) {
@@ -56,7 +64,7 @@
             return;
         }
         btn.disabled = true;
-        resultEl.innerHTML = '<div class="spinner">Submitting your application (this can take a minute)...</div>';
+        resultEl.innerHTML = '<div class="spinner">Reading your résumé and matching it against the role. This takes a moment...</div>';
 
         const formData = new FormData();
         formData.append("resume", fileInput.files[0]);
@@ -69,8 +77,12 @@
             return;
         }
 
-        document.getElementById("step-apply").innerHTML =
-            '<h2 class="fade-in">Thanks for applying!</h2><p class="result fade-in" style="animation-delay:0.08s">We\'ll review your application and be in touch by email.</p>';
+        document.getElementById("step-apply-form").innerHTML = `
+            <div class="fade-in" style="padding:24px 0;">
+                <h3 style="font-size:27px;font-weight:400;margin-bottom:12px;">Thanks for applying.</h3>
+                <p class="result" style="margin-top:0;">We'll review your application and be in touch by email. If you're shortlisted you'll get a link to a short recorded assessment.</p>
+            </div>
+        `;
     });
 </script>
 {% endif %}

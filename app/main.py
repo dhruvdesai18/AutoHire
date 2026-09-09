@@ -47,7 +47,11 @@ def require_recruiter_auth(view):
 @app.route("/")
 @require_recruiter_auth
 def index():
-    return render_template("index.html")
+    return render_template(
+        "index.html",
+        ats_threshold=ATS_SCORE_THRESHOLD,
+        interview_threshold=INTERVIEW_SCORE_THRESHOLD,
+    )
 
 
 @app.route("/jobs", methods=["POST"])
@@ -82,7 +86,26 @@ def list_jobs():
         .order_by("created_at", direction=firestore.Query.DESCENDING)
         .stream()
     )
-    jobs = [{"job_id": j.id, "title": j.get("title")} for j in jobs_ref]
+
+    jobs = []
+    for j in jobs_ref:
+        candidates = [c.to_dict() for c in db.collection("candidates").where("job_id", "==", j.id).stream()]
+        screened_out = sum(1 for c in candidates if c.get("status") == "rejected" and c.get("conversation_score") is None)
+        assessed = sum(1 for c in candidates if c.get("conversation_score") is not None or c.get("status") in ("interview_audio_uploaded", "advanced"))
+        advanced = sum(1 for c in candidates if c.get("status") == "advanced")
+        created_at = j.get("created_at")
+        jobs.append(
+            {
+                "job_id": j.id,
+                "title": j.get("title"),
+                "applied_count": len(candidates),
+                "screened_out_count": screened_out,
+                "assessed_count": assessed,
+                "advanced_count": advanced,
+                "created_at": created_at.isoformat() if created_at else None,
+            }
+        )
+
     return jsonify({"jobs": jobs})
 
 
@@ -111,6 +134,8 @@ def list_job_candidates(job_id):
     candidates = []
     for c in candidates_ref:
         d = c.to_dict()
+        created_at = d.get("created_at")
+        link_sent_at = d.get("link_sent_at")
         candidates.append(
             {
                 "candidate_id": c.id,
@@ -120,6 +145,13 @@ def list_job_candidates(job_id):
                 "status": d.get("status"),
                 "ats_score": d.get("ats_score"),
                 "conversation_score": d.get("conversation_score"),
+                "ats_matched_skills": d.get("ats_matched_skills"),
+                "ats_missing_skills": d.get("ats_missing_skills"),
+                "ats_reasoning": d.get("ats_reasoning"),
+                "interview_summary": d.get("interview_summary"),
+                "interview_evaluation_notes": d.get("interview_evaluation_notes"),
+                "created_at": created_at.isoformat() if created_at else None,
+                "link_sent_at": link_sent_at.isoformat() if link_sent_at else None,
             }
         )
     return jsonify({"candidates": candidates})
@@ -154,12 +186,14 @@ def apply_page(job_id):
 
     job_data = job.to_dict()
     formatted = job_data.get("formatted_description")
+    created_at = job_data.get("created_at")
     return render_template(
         "apply.html",
         job_id=job_id,
         title=job_data.get("title"),
         description=job_data.get("description"),
         sections=formatted.get("sections") if formatted else None,
+        posted=f"Posted {created_at.strftime('%-d %b')}" if created_at else None,
     )
 
 
