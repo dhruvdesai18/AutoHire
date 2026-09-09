@@ -32,7 +32,8 @@
 body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
-    background: var(--bg) var(--bg-glow);
+    background-color: var(--bg);
+    background-image: var(--bg-glow);
     background-attachment: fixed;
     color: var(--text);
     -webkit-font-smoothing: antialiased;
