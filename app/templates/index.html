@@ -115,8 +115,10 @@
         });
 
         if (!selectedJobId || !jobs.find((j) => j.job_id === selectedJobId)) {
-            selectJob(jobs[0].job_id);
+            selectedJobId = jobs[0].job_id;
+            selectedCandidateId = null;
         }
+        await loadCandidates(selectedJobId);
     }
 
     async function selectJob(jobId) {
