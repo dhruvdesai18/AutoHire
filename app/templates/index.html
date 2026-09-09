@@ -20,10 +20,11 @@
 
     <div class="card">
         <h2>Published Jobs</h2>
-        <div id="jobs-list" class="result">Loading...</div>
+        <div id="jobs-list" class="result"></div>
     </div>
 </div>
 
+<script src="{{ url_for('static', filename='app.js') }}"></script>
 <script>
     function badge(text, kind) {
         return `<span class="badge ${kind}">${text}</span>`;
@@ -47,16 +48,22 @@
 
     async function loadJobs() {
         const listEl = document.getElementById("jobs-list");
+        listEl.innerHTML = `
+            <div class="skeleton-line w-40"></div>
+            <div class="skeleton-line w-80"></div>
+            <div class="skeleton-line w-60" style="margin-top:20px;"></div>
+        `;
+
         const res = await fetch("/jobs");
         const data = await res.json();
 
         if (!data.jobs.length) {
-            listEl.innerHTML = '<div class="empty-state">No jobs published yet.</div>';
+            listEl.innerHTML = '<div class="empty-state fade-in">No jobs published yet.</div>';
             return;
         }
 
-        listEl.innerHTML = data.jobs.map(job => `
-            <div class="job-row" data-job-id="${job.job_id}">
+        listEl.innerHTML = data.jobs.map((job, i) => `
+            <div class="job-row fade-in" style="animation-delay:${i * 0.04}s" data-job-id="${job.job_id}">
                 <div class="job-title">${job.title}</div>
                 <div><a href="${applyUrl(job.job_id)}" target="_blank">${applyUrl(job.job_id)}</a></div>
                 <button class="link-btn view-candidates-btn" data-job-id="${job.job_id}">View Candidates</button>
@@ -81,25 +88,29 @@
         const res = await fetch(`/jobs/${jobId}`, { method: "DELETE" });
         if (!res.ok) {
             const data = await res.json();
-            alert(data.error || "Failed to delete job.");
+            showToast(data.error || "Failed to delete job.", "error");
             return;
         }
+        showToast(`"${jobTitle}" deleted.`, "success");
         loadJobs();
     }
 
     async function loadCandidates(jobId) {
         const container = document.getElementById(`candidates-${jobId}`);
-        container.innerHTML = '<div class="spinner">Loading candidates...</div>';
+        container.innerHTML = `
+            <div class="skeleton-line w-60" style="margin-top:14px;"></div>
+            <div class="skeleton-line w-40"></div>
+        `;
 
         const res = await fetch(`/jobs/${jobId}/candidates`);
         const data = await res.json();
 
         if (!data.candidates.length) {
-            container.innerHTML = '<div class="empty-state">No applications yet.</div>';
+            container.innerHTML = '<div class="empty-state fade-in">No applications yet.</div>';
             return;
         }
 
-        container.innerHTML = data.candidates.map(c => {
+        container.innerHTML = data.candidates.map((c, i) => {
             const meta = STATUS_META[c.status] || { label: c.status, kind: "st-progress" };
             const scoreLine = [
                 c.ats_score != null ? `ATS: ${c.ats_score}` : null,
@@ -108,7 +119,7 @@
             const metaLine = [c.email, scoreLine].filter(Boolean).join(" · ");
 
             return `
-                <div class="candidate-row" data-candidate-id="${c.candidate_id}">
+                <div class="candidate-row fade-in" style="animation-delay:${i * 0.04}s" data-candidate-id="${c.candidate_id}">
                     <div>${c.name || c.filename || c.candidate_id} <span class="status-pill ${meta.kind}">${meta.label}</span> <a class="link-btn inline" href="/candidates/${c.candidate_id}/resume" target="_blank">View Resume</a></div>
                     <div class="meta">${metaLine}</div>
                     ${c.status === "interview_audio_uploaded"
@@ -132,14 +143,16 @@
         const data = await res.json();
         if (!res.ok) {
             resultEl.innerHTML = `<div class="error">${data.error}</div>`;
+            showToast(data.error || "Evaluation failed.", "error");
             return;
         }
 
         const advanced = data.status === "advanced";
         resultEl.innerHTML = `
-            <div>Score: <strong>${data.conversation_score}</strong>/100 ${badge(advanced ? "ADVANCED" : "REJECTED", advanced ? "pass" : "fail")}</div>
-            <div style="margin-top:6px;">${data.summary}</div>
+            <div class="fade-in">Score: <strong>${data.conversation_score}</strong>/100 ${badge(advanced ? "ADVANCED" : "REJECTED", advanced ? "pass" : "fail")}</div>
+            <div class="fade-in" style="margin-top:6px;">${data.summary}</div>
         `;
+        showToast(advanced ? "Candidate advanced!" : "Candidate rejected.", advanced ? "success" : "info");
         loadCandidates(jobId);
     }
 
@@ -161,12 +174,14 @@
         const data = await res.json();
         if (!res.ok) {
             resultEl.innerHTML = `<div class="error">${data.error}</div>`;
+            showToast(data.error || "Failed to publish job.", "error");
             return;
         }
 
         document.getElementById("job-title").value = "";
         document.getElementById("job-description").value = "";
-        resultEl.innerHTML = `Published. Application link: <a href="${applyUrl(data.job_id)}" target="_blank">${applyUrl(data.job_id)}</a>`;
+        resultEl.innerHTML = `<span class="fade-in">Published. Application link: <a href="${applyUrl(data.job_id)}" target="_blank">${applyUrl(data.job_id)}</a></span>`;
+        showToast("Job published!", "success");
         loadJobs();
     });
 

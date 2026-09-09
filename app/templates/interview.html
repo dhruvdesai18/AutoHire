@@ -50,6 +50,7 @@
 </div>
 
 {% if not error and not submitted %}
+<script src="{{ url_for('static', filename='app.js') }}"></script>
 <script>
     const CANDIDATE_ID = {{ candidate_id|tojson }};
     const QUESTIONS = {{ questions|tojson }};
@@ -80,7 +81,7 @@
     function renderQuestions() {
         const container = document.getElementById("questions-container");
         container.innerHTML = QUESTIONS.map((q, i) => `
-            <div class="card question-card" id="q-card-${i}">
+            <div class="card question-card fade-in" style="animation-delay:${i * 0.06}s" id="q-card-${i}">
                 <h2>Question ${i + 1}</h2>
                 <p class="result">${q}</p>
                 <div id="q-controls-${i}"></div>
@@ -104,8 +105,8 @@
         const attemptsLeft = MAX_ATTEMPTS - s.attemptsUsed;
         let html = "";
         if (s.blob) {
-            html += `<audio controls src="${URL.createObjectURL(s.blob)}"></audio>`;
-            html += `<div class="meta">Answer recorded.</div>`;
+            html += `<div class="fade-in"><audio controls src="${URL.createObjectURL(s.blob)}"></audio>
+                <div class="meta">Answer recorded.</div></div>`;
         }
         if (attemptsLeft > 0) {
             html += `<button onclick="startRecording(${i})">${s.blob ? "Re-record" : "Record Answer"}</button>`;
@@ -122,7 +123,7 @@
         try {
             stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         } catch (e) {
-            alert("Microphone access is required to record your answer.");
+            showToast("Microphone access is required to record your answer.", "error");
             return;
         }
 
@@ -181,12 +182,13 @@
         const data = await res.json();
         if (!res.ok) {
             resultEl.innerHTML = `<div class="error">${data.error}</div>`;
+            showToast(data.error || "Submission failed.", "error");
             submitted = false;
             return;
         }
 
         document.getElementById("assessment-ui").innerHTML =
-            '<div class="card"><h2>Thanks — your answers have been submitted.</h2><p class="result">We\'ll be in touch with next steps.</p></div>';
+            '<div class="card fade-in"><h2>Thanks — your answers have been submitted.</h2><p class="result">We\'ll be in touch with next steps.</p></div>';
     }
 
     document.getElementById("btn-submit").addEventListener("click", submitAssessment);

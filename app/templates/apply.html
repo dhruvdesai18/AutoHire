@@ -45,6 +45,7 @@
 </div>
 
 {% if not error %}
+<script src="{{ url_for('static', filename='app.js') }}"></script>
 <script>
     document.getElementById("btn-apply").addEventListener("click", async () => {
         const fileInput = document.getElementById("resume-file");
@@ -63,12 +64,13 @@
         const data = await res.json();
         if (!res.ok) {
             resultEl.innerHTML = `<div class="error">${data.error}</div>`;
+            showToast(data.error || "Something went wrong.", "error");
             btn.disabled = false;
             return;
         }
 
         document.getElementById("step-apply").innerHTML =
-            '<h2>Thanks for applying!</h2><p class="result">We\'ll review your application and be in touch by email.</p>';
+            '<h2 class="fade-in">Thanks for applying!</h2><p class="result fade-in" style="animation-delay:0.08s">We\'ll review your application and be in touch by email.</p>';
     });
 </script>
 {% endif %}
