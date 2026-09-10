@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>AutoHire — Sign In</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+<div class="wrap" style="max-width: 420px; padding-top: 120px; text-align: center;">
+    <h1 style="justify-content: center;">AutoHire</h1>
+    <p class="subtitle">Sign in to manage your roles and candidates</p>
+
+    <div class="card">
+        <div id="g_id_onload"
+             data-client_id="{{ google_client_id }}"
+             data-callback="handleCredentialResponse">
+        </div>
+        <div class="g_id_signin"
+             data-type="standard"
+             data-shape="pill"
+             data-theme="outline"
+             data-size="large"
+             style="display: flex; justify-content: center;">
+        </div>
+        <div class="error" id="login-error" style="margin-top: 16px;"></div>
+    </div>
+</div>
+
+<script>
+    async function handleCredentialResponse(response) {
+        const errorEl = document.getElementById("login-error");
+        const res = await fetch("/auth/google", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ credential: response.credential }),
+        });
+        if (!res.ok) {
+            const data = await res.json();
+            errorEl.textContent = data.error || "Sign-in failed.";
+            return;
+        }
+        window.location.href = "/";
+    }
+</script>
+</body>
+</html>

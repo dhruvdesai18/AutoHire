@@ -1,17 +1,19 @@
-import hmac
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from io import BytesIO
 
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, session, redirect
+from google.auth.transport import requests as google_auth_requests
 from google.cloud import firestore
+from google.oauth2 import id_token as google_id_token
 
 from app.clients import bucket, db
 from app.config import (
     ATS_SCORE_THRESHOLD,
     BASE_URL,
-    DASHBOARD_PASSWORD,
+    GOOGLE_OAUTH_CLIENT_ID,
     INTERVIEW_SCORE_THRESHOLD,
+    SECRET_KEY,
 )
 from app.document_ai import extract_text
 from app.gemini import (
@@ -31,31 +33,67 @@ def _first_name(candidate_name):
     return candidate_name.split(" ")[0]
 
 app = Flask(__name__)
+app.secret_key = SECRET_KEY
 
 
-def require_recruiter_auth(view):
+def require_login(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
-        auth = request.authorization
-        if not auth or not hmac.compare_digest(auth.password or "", DASHBOARD_PASSWORD):
-            return "Authentication required", 401, {"WWW-Authenticate": 'Basic realm="AutoHire Recruiter"'}
+        if not session.get("user_id"):
+            return jsonify({"error": "Not authenticated"}), 401
         return view(*args, **kwargs)
 
     return wrapped
 
 
+@app.route("/login")
+def login_page():
+    if session.get("user_id"):
+        return redirect("/")
+    return render_template("login.html", google_client_id=GOOGLE_OAUTH_CLIENT_ID)
+
+
+@app.route("/auth/google", methods=["POST"])
+def auth_google():
+    data = request.get_json(silent=True, force=True) or {}
+    credential = data.get("credential")
+    if not credential:
+        return jsonify({"error": "Missing credential"}), 400
+
+    try:
+        claims = google_id_token.verify_oauth2_token(
+            credential, google_auth_requests.Request(), GOOGLE_OAUTH_CLIENT_ID
+        )
+    except ValueError:
+        return jsonify({"error": "Invalid credential"}), 401
+
+    session["user_id"] = claims["sub"]
+    session["user_email"] = claims.get("email")
+    session["user_name"] = claims.get("name", claims.get("email"))
+    return jsonify({"status": "ok"})
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
+
+
 @app.route("/")
-@require_recruiter_auth
 def index():
+    if not session.get("user_id"):
+        return redirect("/login")
     return render_template(
         "index.html",
         ats_threshold=ATS_SCORE_THRESHOLD,
         interview_threshold=INTERVIEW_SCORE_THRESHOLD,
+        user_name=session.get("user_name"),
+        user_email=session.get("user_email"),
     )
 
 
 @app.route("/jobs", methods=["POST"])
-@require_recruiter_auth
+@require_login
 def create_job():
     data = request.get_json(silent=True, force=True) or {}
     title = data.get("title")
@@ -71,6 +109,8 @@ def create_job():
             "title": title,
             "description": description,
             "formatted_description": formatted_description,
+            "owner_id": session["user_id"],
+            "owner_email": session.get("user_email"),
             "created_at": firestore.SERVER_TIMESTAMP,
         }
     )
@@ -79,11 +119,11 @@ def create_job():
 
 
 @app.route("/jobs", methods=["GET"])
-@require_recruiter_auth
+@require_login
 def list_jobs():
     jobs_ref = (
         db.collection("jobs")
-        .order_by("created_at", direction=firestore.Query.DESCENDING)
+        .where("owner_id", "==", session["user_id"])
         .stream()
     )
 
@@ -103,19 +143,25 @@ def list_jobs():
                 "assessed_count": assessed,
                 "advanced_count": advanced,
                 "created_at": created_at.isoformat() if created_at else None,
+                "_sort_key": created_at or datetime.min.replace(tzinfo=timezone.utc),
             }
         )
+
+    jobs.sort(key=lambda j: j.pop("_sort_key"), reverse=True)
 
     return jsonify({"jobs": jobs})
 
 
 @app.route("/jobs/<job_id>", methods=["DELETE"])
-@require_recruiter_auth
+@require_login
 def delete_job(job_id):
-    job_ref = db.collection("jobs").document(job_id)
-    if not job_ref.get().exists:
+    job = db.collection("jobs").document(job_id).get()
+    if not job.exists:
         return jsonify({"error": "Job not found"}), 404
+    if job.to_dict().get("owner_id") != session["user_id"]:
+        return jsonify({"error": "Not authorized"}), 403
 
+    job_ref = job.reference
     candidates = db.collection("candidates").where("job_id", "==", job_id).stream()
     for c in candidates:
         for prefix in (f"resumes/{c.id}/", f"interviews/{c.id}/"):
@@ -128,8 +174,14 @@ def delete_job(job_id):
 
 
 @app.route("/jobs/<job_id>/candidates")
-@require_recruiter_auth
+@require_login
 def list_job_candidates(job_id):
+    job = db.collection("jobs").document(job_id).get()
+    if not job.exists:
+        return jsonify({"error": "Job not found"}), 404
+    if job.to_dict().get("owner_id") != session["user_id"]:
+        return jsonify({"error": "Not authorized"}), 403
+
     candidates_ref = db.collection("candidates").where("job_id", "==", job_id).stream()
     candidates = []
     for c in candidates_ref:
@@ -158,13 +210,16 @@ def list_job_candidates(job_id):
 
 
 @app.route("/candidates/<candidate_id>/resume")
-@require_recruiter_auth
+@require_login
 def view_resume(candidate_id):
     candidate = db.collection("candidates").document(candidate_id).get()
     if not candidate.exists:
         return jsonify({"error": "Candidate not found"}), 404
 
     candidate_data = candidate.to_dict()
+    if candidate_data.get("owner_id") != session["user_id"]:
+        return jsonify({"error": "Not authorized"}), 403
+
     gcs_path = candidate_data.get("gcs_path")
     if not gcs_path:
         return jsonify({"error": "No resume on file for this candidate"}), 404
@@ -210,7 +265,8 @@ def submit_application(job_id):
     if resume_file.filename == "":
         return jsonify({"error": "No selected file"}), 400
 
-    job_description = job.get("description")
+    job_data = job.to_dict()
+    job_description = job_data.get("description")
 
     candidate_ref = db.collection("candidates").document()
     gcs_path = f"resumes/{candidate_ref.id}/{resume_file.filename}"
@@ -220,6 +276,7 @@ def submit_application(job_id):
     candidate_ref.set(
         {
             "job_id": job_id,
+            "owner_id": job_data.get("owner_id"),
             "job_description": job_description,
             "filename": resume_file.filename,
             "gcs_path": gcs_path,
@@ -272,124 +329,6 @@ def submit_application(job_id):
     return jsonify({"status": "submitted"})
 
 
-@app.route("/upload/resume", methods=["POST"])
-@require_recruiter_auth
-def upload_resume():
-    if "resume" not in request.files:
-        return jsonify({"error": "No resume file provided"}), 400
-
-    resume_file = request.files["resume"]
-    if resume_file.filename == "":
-        return jsonify({"error": "No selected file"}), 400
-
-    candidate_ref = db.collection("candidates").document()
-    gcs_path = f"resumes/{candidate_ref.id}/{resume_file.filename}"
-
-    blob = bucket.blob(gcs_path)
-    blob.upload_from_file(resume_file, content_type=resume_file.content_type)
-
-    candidate_ref.set(
-        {
-            "filename": resume_file.filename,
-            "gcs_path": gcs_path,
-            "status": "uploaded",
-            "created_at": firestore.SERVER_TIMESTAMP,
-        }
-    )
-
-    return jsonify({"candidate_id": candidate_ref.id, "status": "uploaded"})
-
-
-@app.route("/parse/<candidate_id>", methods=["POST"])
-@require_recruiter_auth
-def parse_resume(candidate_id):
-    candidate_ref = db.collection("candidates").document(candidate_id)
-    candidate = candidate_ref.get()
-    if not candidate.exists:
-        return jsonify({"error": "Candidate not found"}), 404
-
-    gcs_path = candidate.get("gcs_path")
-    pdf_bytes = bucket.blob(gcs_path).download_as_bytes()
-
-    parsed_text = extract_text(pdf_bytes)
-
-    candidate_ref.update({"parsed_text": parsed_text, "status": "parsed"})
-
-    return jsonify(
-        {
-            "candidate_id": candidate_id,
-            "status": "parsed",
-            "parsed_text_preview": parsed_text[:300],
-        }
-    )
-
-
-@app.route("/score/<candidate_id>", methods=["POST"])
-@require_recruiter_auth
-def score_candidate(candidate_id):
-    job_description = request.get_json(silent=True, force=True).get("job_description")
-    if not job_description:
-        return jsonify({"error": "job_description is required"}), 400
-
-    candidate_ref = db.collection("candidates").document(candidate_id)
-    candidate = candidate_ref.get()
-    if not candidate.exists:
-        return jsonify({"error": "Candidate not found"}), 404
-
-    parsed_text = candidate.get("parsed_text")
-    if not parsed_text:
-        return jsonify({"error": "Candidate has not been parsed yet"}), 400
-
-    result = score_resume(parsed_text, job_description)
-    passed = result["score"] >= ATS_SCORE_THRESHOLD
-    status = "screening_passed" if passed else "rejected"
-
-    candidate_ref.update(
-        {
-            "job_description": job_description,
-            "candidate_name": result["candidate_name"],
-            "ats_score": result["score"],
-            "ats_matched_skills": result["matched_skills"],
-            "ats_missing_skills": result["missing_skills"],
-            "ats_reasoning": result["reasoning"],
-            "status": status,
-        }
-    )
-
-    return jsonify({"candidate_id": candidate_id, "status": status, **result})
-
-
-@app.route("/generate-interview-prep/<candidate_id>", methods=["POST"])
-@require_recruiter_auth
-def generate_interview_prep_route(candidate_id):
-    candidate_ref = db.collection("candidates").document(candidate_id)
-    candidate = candidate_ref.get()
-    if not candidate.exists:
-        return jsonify({"error": "Candidate not found"}), 404
-
-    if candidate.get("status") != "screening_passed":
-        return (
-            jsonify({"error": "Candidate has not passed ATS screening"}),
-            400,
-        )
-
-    result = generate_interview_prep(
-        candidate.get("parsed_text"), candidate.get("job_description")
-    )
-
-    candidate_ref.update(
-        {
-            "email": result["email"],
-            "interview_questions": result["questions"],
-            "status": "interview_prep_ready",
-        }
-    )
-
-    return jsonify(
-        {"candidate_id": candidate_id, "status": "interview_prep_ready", **result}
-    )
-
-
 def _build_interview_email_body(candidate_id, first_name):
     return (
         f"Hello {first_name},\n\n"
@@ -398,34 +337,6 @@ def _build_interview_email_body(candidate_id, first_name):
         f"{BASE_URL}/interview/{candidate_id}\n\n"
         "Best of luck,\nAutoHire"
     )
-
-
-@app.route("/send-interview-link/<candidate_id>", methods=["POST"])
-@require_recruiter_auth
-def send_interview_link(candidate_id):
-    candidate_ref = db.collection("candidates").document(candidate_id)
-    candidate = candidate_ref.get()
-    if not candidate.exists:
-        return jsonify({"error": "Candidate not found"}), 404
-
-    candidate_data = candidate.to_dict()
-    if candidate_data.get("status") != "interview_prep_ready":
-        return jsonify({"error": "Candidate has no interview prep ready"}), 400
-
-    body = _build_interview_email_body(
-        candidate_id, _first_name(candidate_data.get("candidate_name"))
-    )
-    send_email(candidate_data.get("email"), "You've Been Shortlisted", body)
-
-    candidate_ref.update(
-        {
-            "status": "interview_link_sent",
-            "link_sent_at": firestore.SERVER_TIMESTAMP,
-            "assessment_deadline": datetime.now(timezone.utc) + ASSESSMENT_WINDOW,
-        }
-    )
-
-    return jsonify({"candidate_id": candidate_id, "status": "interview_link_sent"})
 
 
 def _is_expired(candidate_data: dict) -> bool:
@@ -508,7 +419,7 @@ def submit_interview_assessment(candidate_id):
 
 
 @app.route("/evaluate-interview/<candidate_id>", methods=["POST"])
-@require_recruiter_auth
+@require_login
 def evaluate_interview_route(candidate_id):
     candidate_ref = db.collection("candidates").document(candidate_id)
     candidate = candidate_ref.get()
@@ -516,6 +427,8 @@ def evaluate_interview_route(candidate_id):
         return jsonify({"error": "Candidate not found"}), 404
 
     candidate_data = candidate.to_dict()
+    if candidate_data.get("owner_id") != session["user_id"]:
+        return jsonify({"error": "Not authorized"}), 403
     if candidate_data.get("status") != "interview_audio_uploaded":
         return jsonify({"error": "Candidate has no interview audio to evaluate"}), 400
 

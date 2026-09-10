@@ -10,6 +10,8 @@
     <div class="nav">
         <span class="nav-brand">AutoHire</span>
         <span class="nav-subtitle" style="font-size:12px;color:var(--color-neutral-600);margin-right:auto;">Recruiter workspace · protected</span>
+        <span style="font-size:12px;color:var(--color-neutral-600);margin-right:12px;">{{ user_name }}</span>
+        <a href="/logout" style="font-size:12px;color:var(--color-neutral-600);margin-right:16px;">Sign out</a>
         <button class="btn btn-primary" id="btn-open-publish">Publish a role</button>
     </div>
 
@@ -44,6 +46,15 @@
 
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 <script>
+    const _origFetch = window.fetch;
+    window.fetch = async (...args) => {
+        const res = await _origFetch(...args);
+        if (res.status === 401) {
+            window.location.href = "/login";
+        }
+        return res;
+    };
+
     const ATS_THRESHOLD = {{ ats_threshold|tojson }};
     const INTERVIEW_THRESHOLD = {{ interview_threshold|tojson }};
 
