@@ -188,7 +188,11 @@
                         </td>
                         <td><span class="tag ${meta.tag}">${meta.label}</span></td>
                         <td class="num" style="text-align:right;font-size:15px;">${c.ats_score != null ? c.ats_score : "—"}</td>
-                        <td class="num" style="text-align:right;font-size:15px;color:var(--color-neutral-600);">${c.conversation_score != null ? c.conversation_score : "—"}</td>
+                        <td class="num" style="text-align:right;font-size:15px;color:var(--color-neutral-600);">
+                            ${c.status === "interview_audio_uploaded"
+                                ? `<button class="btn btn-primary" style="padding:3px 12px;font-size:12px;margin-top:0;" data-eval-id="${c.candidate_id}">Evaluate</button>`
+                                : (c.conversation_score != null ? c.conversation_score : "—")}
+                        </td>
                     </tr>
                 `;
             }).join("");
@@ -214,6 +218,18 @@
                 selectedCandidateId = row.dataset.candidateId;
                 col.querySelectorAll(".crow").forEach((r) => r.setAttribute("aria-current", String(r === row)));
                 renderDossier();
+            });
+        });
+        col.querySelectorAll("[data-eval-id]").forEach((btn) => {
+            btn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const id = btn.dataset.evalId;
+                selectedCandidateId = id;
+                col.querySelectorAll(".crow").forEach((r) => r.setAttribute("aria-current", String(r.dataset.candidateId === id)));
+                renderDossier();
+                btn.disabled = true;
+                btn.textContent = "Evaluating…";
+                evaluateCandidate(id);
             });
         });
     }
