@@ -70,6 +70,16 @@ def auth_google():
     session["user_id"] = claims["sub"]
     session["user_email"] = claims.get("email")
     session["user_name"] = claims.get("name", claims.get("email"))
+
+    db.collection("users").document(claims["sub"]).set(
+        {
+            "email": claims.get("email"),
+            "name": claims.get("name"),
+            "last_login": firestore.SERVER_TIMESTAMP,
+        },
+        merge=True,
+    )
+
     return jsonify({"status": "ok"})
 
 
