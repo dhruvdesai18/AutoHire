@@ -46,6 +46,10 @@ def require_login(view):
     return wrapped
 
 
+def _owns_or_admin(owner_id):
+    return session.get("is_admin") or owner_id == session.get("user_id")
+
+
 @app.route("/login")
 def login_page():
     if session.get("user_id"):
@@ -67,11 +71,16 @@ def auth_google():
     except ValueError:
         return jsonify({"error": "Invalid credential"}), 401
 
+    user_ref = db.collection("users").document(claims["sub"])
+    existing_user = user_ref.get()
+    is_admin = existing_user.to_dict().get("is_admin", False) if existing_user.exists else False
+
     session["user_id"] = claims["sub"]
     session["user_email"] = claims.get("email")
     session["user_name"] = claims.get("name", claims.get("email"))
+    session["is_admin"] = is_admin
 
-    db.collection("users").document(claims["sub"]).set(
+    user_ref.set(
         {
             "email": claims.get("email"),
             "name": claims.get("name"),
@@ -99,6 +108,7 @@ def index():
         interview_threshold=INTERVIEW_SCORE_THRESHOLD,
         user_name=session.get("user_name"),
         user_email=session.get("user_email"),
+        is_admin=session.get("is_admin", False),
     )
 
 
@@ -131,23 +141,28 @@ def create_job():
 @app.route("/jobs", methods=["GET"])
 @require_login
 def list_jobs():
-    jobs_ref = (
-        db.collection("jobs")
-        .where("owner_id", "==", session["user_id"])
-        .stream()
-    )
+    if session.get("is_admin"):
+        jobs_ref = db.collection("jobs").stream()
+    else:
+        jobs_ref = (
+            db.collection("jobs")
+            .where("owner_id", "==", session["user_id"])
+            .stream()
+        )
 
     jobs = []
     for j in jobs_ref:
+        j_data = j.to_dict()
         candidates = [c.to_dict() for c in db.collection("candidates").where("job_id", "==", j.id).stream()]
         screened_out = sum(1 for c in candidates if c.get("status") == "rejected" and c.get("conversation_score") is None)
         assessed = sum(1 for c in candidates if c.get("conversation_score") is not None or c.get("status") in ("interview_audio_uploaded", "advanced"))
         advanced = sum(1 for c in candidates if c.get("status") == "advanced")
-        created_at = j.get("created_at")
+        created_at = j_data.get("created_at")
         jobs.append(
             {
                 "job_id": j.id,
-                "title": j.get("title"),
+                "title": j_data.get("title"),
+                "owner_email": j_data.get("owner_email"),
                 "applied_count": len(candidates),
                 "screened_out_count": screened_out,
                 "assessed_count": assessed,
@@ -168,7 +183,7 @@ def delete_job(job_id):
     job = db.collection("jobs").document(job_id).get()
     if not job.exists:
         return jsonify({"error": "Job not found"}), 404
-    if job.to_dict().get("owner_id") != session["user_id"]:
+    if not _owns_or_admin(job.to_dict().get("owner_id")):
         return jsonify({"error": "Not authorized"}), 403
 
     job_ref = job.reference
@@ -189,7 +204,7 @@ def list_job_candidates(job_id):
     job = db.collection("jobs").document(job_id).get()
     if not job.exists:
         return jsonify({"error": "Job not found"}), 404
-    if job.to_dict().get("owner_id") != session["user_id"]:
+    if not _owns_or_admin(job.to_dict().get("owner_id")):
         return jsonify({"error": "Not authorized"}), 403
 
     candidates_ref = db.collection("candidates").where("job_id", "==", job_id).stream()
@@ -227,7 +242,7 @@ def view_resume(candidate_id):
         return jsonify({"error": "Candidate not found"}), 404
 
     candidate_data = candidate.to_dict()
-    if candidate_data.get("owner_id") != session["user_id"]:
+    if not _owns_or_admin(candidate_data.get("owner_id")):
         return jsonify({"error": "Not authorized"}), 403
 
     gcs_path = candidate_data.get("gcs_path")
@@ -437,7 +452,7 @@ def evaluate_interview_route(candidate_id):
         return jsonify({"error": "Candidate not found"}), 404
 
     candidate_data = candidate.to_dict()
-    if candidate_data.get("owner_id") != session["user_id"]:
+    if not _owns_or_admin(candidate_data.get("owner_id")):
         return jsonify({"error": "Not authorized"}), 403
     if candidate_data.get("status") != "interview_audio_uploaded":
         return jsonify({"error": "Candidate has no interview audio to evaluate"}), 400

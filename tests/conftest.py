@@ -46,3 +46,14 @@ def logged_in_client(app):
         sess["user_email"] = TEST_USER_EMAIL
         sess["user_name"] = "Test User"
     return test_client
+
+
+@pytest.fixture
+def admin_client(app):
+    test_client = app.test_client()
+    with test_client.session_transaction() as sess:
+        sess["user_id"] = "admin-user-id"
+        sess["user_email"] = "admin@example.com"
+        sess["user_name"] = "Admin User"
+        sess["is_admin"] = True
+    return test_client

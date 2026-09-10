@@ -48,6 +48,18 @@ def test_delete_job_rejects_non_owner(logged_in_client):
         assert res.status_code == 403
 
 
+def test_delete_job_allows_admin_for_non_owned_job(admin_client):
+    with patch("app.main.db") as mock_db:
+        mock_job = MagicMock()
+        mock_job.exists = True
+        mock_job.to_dict.return_value = {"owner_id": "someone-else"}
+        mock_db.collection.return_value.document.return_value.get.return_value = mock_job
+        mock_db.collection.return_value.where.return_value.stream.return_value = []
+
+        res = admin_client.delete("/jobs/some-job-id")
+        assert res.status_code == 200
+
+
 def test_view_resume_rejects_non_owner(logged_in_client):
     with patch("app.main.db") as mock_db:
         mock_candidate = MagicMock()

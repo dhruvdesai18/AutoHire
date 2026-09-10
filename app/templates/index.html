@@ -57,6 +57,8 @@
 
     const ATS_THRESHOLD = {{ ats_threshold|tojson }};
     const INTERVIEW_THRESHOLD = {{ interview_threshold|tojson }};
+    const IS_ADMIN = {{ is_admin|tojson }};
+    const CURRENT_USER_EMAIL = {{ user_email|tojson }};
 
     const STATUS_META = {
         uploaded: { label: "Screening", tag: "tag-neutral" },
@@ -117,7 +119,7 @@
             <button class="jrow" aria-current="${job.job_id === selectedJobId}" data-job-id="${job.job_id}">
                 <span class="jtitle">${job.title}</span>
                 <span class="num" style="font-size:12px;color:var(--color-neutral-600);">${job.applied_count}</span>
-                <span class="jsub">${job.advanced_count} advanced${job.created_at ? " · " + fmtDate(job.created_at) : ""}</span>
+                <span class="jsub">${job.advanced_count} advanced${job.created_at ? " · " + fmtDate(job.created_at) : ""}${IS_ADMIN && job.owner_email && job.owner_email !== CURRENT_USER_EMAIL ? " · " + job.owner_email : ""}</span>
             </button>
         `).join("");
 
