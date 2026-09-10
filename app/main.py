@@ -54,7 +54,9 @@ def _owns_or_admin(owner_id):
 def login_page():
     if session.get("user_id"):
         return redirect("/")
-    return render_template("login.html", google_client_id=GOOGLE_OAUTH_CLIENT_ID)
+    return render_template(
+        "login.html", google_client_id=GOOGLE_OAUTH_CLIENT_ID, base_url=BASE_URL
+    )
 
 
 @app.route("/auth/google", methods=["POST"])
