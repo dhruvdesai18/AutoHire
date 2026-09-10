@@ -224,6 +224,21 @@ textarea.input { min-height: 90px; resize: vertical; line-height: 1.5; }
     .dossier-col { display: none; }
 }
 
+@media (max-width: 760px) {
+    .nav-subtitle { display: none; }
+    .dashboard-grid { grid-template-columns: 1fr; min-height: 0; }
+    .rail-col { border-right: none; border-bottom: 1px solid var(--color-divider); }
+    .main-col { padding: 18px 16px 24px; }
+    .dossier-col {
+        display: block;
+        border-left: none;
+        border-top: 1px solid var(--color-divider);
+        padding: 18px 16px 34px;
+    }
+    .stats-row { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 18px; }
+    .table-scroll { overflow-x: auto; }
+}
+
 .rail-col { border-right: 1px solid var(--color-divider); display: flex; flex-direction: column; }
 .rail-head { padding: 16px 14px 12px; display: flex; align-items: baseline; justify-content: space-between; }
 

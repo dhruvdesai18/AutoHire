@@ -9,7 +9,7 @@
 <div class="app-shell">
     <div class="nav">
         <span class="nav-brand">AutoHire</span>
-        <span style="font-size:12px;color:var(--color-neutral-600);margin-right:auto;">Recruiter workspace · protected</span>
+        <span class="nav-subtitle" style="font-size:12px;color:var(--color-neutral-600);margin-right:auto;">Recruiter workspace · protected</span>
         <button class="btn btn-primary" id="btn-open-publish">Publish a role</button>
     </div>
 
@@ -194,10 +194,12 @@
             }).join("");
 
             col.innerHTML = head + `
-                <table class="table">
-                    <thead><tr><th>Candidate</th><th>Stage</th><th style="text-align:right;">Résumé</th><th style="text-align:right;">Assessment</th></tr></thead>
-                    <tbody>${rows}</tbody>
-                </table>
+                <div class="table-scroll">
+                    <table class="table">
+                        <thead><tr><th>Candidate</th><th>Stage</th><th style="text-align:right;">Résumé</th><th style="text-align:right;">Assessment</th></tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
                 <p style="font-size:11px;color:var(--color-neutral-600);margin-top:14px;">Scores are out of 100. Screening gate ${ATS_THRESHOLD} · assessment gate ${INTERVIEW_THRESHOLD}. Both applied automatically.</p>
             `;
         }
