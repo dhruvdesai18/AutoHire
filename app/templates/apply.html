@@ -40,9 +40,9 @@
 
             <div class="card" style="margin-top:24px;">
                 <div class="card-kicker">Apply</div>
-                <p class="card-body">Your résumé is all we need. No forms, no account.</p>
+                <p class="card-body">Your resume is all we need. No forms, no account.</p>
                 <input type="file" id="resume-file" accept=".pdf" style="position:absolute;width:1px;height:1px;opacity:0;">
-                <button id="btn-pick-file" class="btn btn-secondary btn-block" style="justify-content:flex-start;min-height:46px;" type="button">Choose your résumé (PDF)</button>
+                <button id="btn-pick-file" class="btn btn-secondary btn-block" style="justify-content:flex-start;min-height:46px;" type="button">Choose your resume (PDF)</button>
                 <button id="btn-apply" class="btn btn-primary btn-block" style="min-height:46px;">Submit application</button>
                 <div class="result" id="apply-result"></div>
             </div>
@@ -57,7 +57,7 @@
     const pickBtn = document.getElementById("btn-pick-file");
     pickBtn.addEventListener("click", () => fileInput.click());
     fileInput.addEventListener("change", () => {
-        pickBtn.textContent = fileInput.files.length ? fileInput.files[0].name : "Choose your résumé (PDF)";
+        pickBtn.textContent = fileInput.files.length ? fileInput.files[0].name : "Choose your resume (PDF)";
     });
 
     document.getElementById("btn-apply").addEventListener("click", async () => {
@@ -68,7 +68,7 @@
             return;
         }
         btn.disabled = true;
-        resultEl.innerHTML = '<div class="spinner">Reading your résumé and matching it against the role. This takes a moment...</div>';
+        resultEl.innerHTML = '<div class="spinner">Reading your resume and matching it against the role. This takes a moment...</div>';
 
         const formData = new FormData();
         formData.append("resume", fileInput.files[0]);

@@ -217,7 +217,7 @@
             col.innerHTML = head + `
                 <div class="table-scroll">
                     <table class="table">
-                        <thead><tr><th>Candidate</th><th>Stage</th><th style="text-align:right;">Résumé</th><th style="text-align:right;">Assessment</th></tr></thead>
+                        <thead><tr><th>Candidate</th><th>Stage</th><th style="text-align:right;">Resume</th><th style="text-align:right;">Assessment</th></tr></thead>
                         <tbody>${rows}</tbody>
                     </table>
                 </div>
@@ -289,12 +289,12 @@
                 ? { title: "Rejected automatically", why: `Assessment scored ${c.conversation_score}, below the ${INTERVIEW_THRESHOLD} gate.` }
                 : { title: "Screened out automatically", why: `Score ${c.ats_score} against the ${ATS_THRESHOLD} gate.` };
         }
-        return { title: "Awaiting screening", why: "Résumé received; scoring not yet complete." };
+        return { title: "Awaiting screening", why: "Resume received; scoring not yet complete." };
     }
 
     function decisionTrail(c) {
         const steps = [];
-        steps.push({ time: fmtTime(c.created_at) || "—", label: "Application received", detail: "Résumé uploaded via the public link. Parsed to text.", by: "Automatic" });
+        steps.push({ time: fmtTime(c.created_at) || "—", label: "Application received", detail: "Resume uploaded via the public link. Parsed to text.", by: "Automatic" });
 
         if (c.ats_score != null) {
             const passed = c.ats_score >= ATS_THRESHOLD;
@@ -307,7 +307,7 @@
         }
 
         if (c.link_sent_at) {
-            steps.push({ time: fmtTime(c.link_sent_at), label: "Shortlist email sent", detail: "Questions written from the résumé. 24-hour window opened.", by: "Automatic · Gmail" });
+            steps.push({ time: fmtTime(c.link_sent_at), label: "Shortlist email sent", detail: "Questions written from the resume. 24-hour window opened.", by: "Automatic · Gmail" });
         }
 
         if (c.status === "expired") {
@@ -352,12 +352,12 @@
         mount.innerHTML = `
             <div class="kick fade-in">Dossier</div>
             <h3 style="font-size:27px;font-weight:400;margin:8px 0 4px;" class="fade-in">${c.name || c.filename || c.candidate_id}</h3>
-            <div style="font-size:12px;color:var(--color-neutral-600);" class="fade-in">${c.email || ""} · <a href="/candidates/${c.candidate_id}/resume" target="_blank">View résumé</a></div>
+            <div style="font-size:12px;color:var(--color-neutral-600);" class="fade-in">${c.email || ""} · <a href="/candidates/${c.candidate_id}/resume" target="_blank">View resume</a></div>
 
             <div class="dossier-scores fade-in">
                 <div class="score-block">
                     <div class="score-n num">${c.ats_score != null ? c.ats_score : "—"}</div>
-                    <div class="score-label">Résumé match</div>
+                    <div class="score-label">Resume match</div>
                 </div>
                 <div class="score-block">
                     <div class="score-n num" style="${c.conversation_score == null ? "color:var(--color-neutral-400);" : ""}">${c.conversation_score != null ? c.conversation_score : "—"}</div>
