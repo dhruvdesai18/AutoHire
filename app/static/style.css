@@ -299,7 +299,7 @@ textarea.input { min-height: 90px; resize: vertical; line-height: 1.5; }
 
 .jd-section { margin-bottom: 18px; }
 .jd-section-heading { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-neutral-600); margin-bottom: 7px; }
-.jd-line { display: grid; grid-template-columns: 14px 1fr; gap: 6px; font-size: 13.5px; line-height: 1.6; margin-bottom: 5px; }
+.jd-line { display: grid; grid-template-columns: 14px 1fr; align-items: start; gap: 6px; font-size: 13.5px; line-height: 1.6; margin-bottom: 5px; }
 .jd-line .dot { color: var(--color-accent); }
 
 .timer-trio { display: grid; grid-template-columns: repeat(3, 1fr); margin: 22px 0 26px; }
