@@ -59,6 +59,16 @@ def login_page():
     )
 
 
+@app.route("/privacy")
+def privacy_page():
+    return render_template("privacy.html")
+
+
+@app.route("/terms")
+def terms_page():
+    return render_template("terms.html")
+
+
 @app.route("/auth/google", methods=["POST"])
 def auth_google():
     data = request.get_json(silent=True, force=True) or {}

@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>AutoHire — Privacy Policy</title>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+    <link rel="icon" href="{{ url_for('static', filename='favicon-32.png') }}" sizes="32x32" type="image/png">
+    <link rel="icon" href="{{ url_for('static', filename='favicon-16.png') }}" sizes="16x16" type="image/png">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="wrap">
+    <div style="font-family:var(--font-heading);font-size:15px;font-weight:600;display:flex;align-items:center;gap:7px;"><img src="{{ url_for('static', filename='favicon.svg') }}" alt="" width="18" height="18" style="border-radius:5px;">AutoHire</div>
+    <hr class="hr" style="margin:12px 0 18px;">
+    <h3 style="font-size:27px;font-weight:400;margin-bottom:16px;">Privacy Policy</h3>
+
+    <p class="result" style="margin-top:0;">AutoHire is a hiring pipeline tool. This page explains what data we collect and how it's used.</p>
+
+    <div class="jd-section">
+        <div class="jd-section-heading">Recruiters</div>
+        <p class="result" style="margin-top:0;">When you sign in with Google, we store your name, email address, and Google account ID to create your workspace. Job postings and candidate data you manage are private to your account unless you delete them.</p>
+    </div>
+
+    <div class="jd-section">
+        <div class="jd-section-heading">Candidates</div>
+        <p class="result" style="margin-top:0;">When you apply to a role, we store your résumé, extracted name, and any recorded interview answers you submit, solely to evaluate your application. This data is visible only to the recruiter who posted the role.</p>
+    </div>
+
+    <div class="jd-section">
+        <div class="jd-section-heading">Email</div>
+        <p class="result" style="margin-top:0;">We send application status and interview-link emails from hr.autohire@gmail.com via the Gmail API. We do not read your inbox or send email on your behalf.</p>
+    </div>
+
+    <div class="jd-section">
+        <div class="jd-section-heading">Data retention & deletion</div>
+        <p class="result" style="margin-top:0;">Recruiters can delete a job posting at any time, which also removes its associated candidate data and files. To request deletion of your data, contact hr.autohire@gmail.com.</p>
+    </div>
+
+    <div class="jd-section">
+        <div class="jd-section-heading">Third parties</div>
+        <p class="result" style="margin-top:0;">Resumes and interview recordings are processed using Google Cloud services (Document AI, Vertex AI/Gemini) solely to score and evaluate applications. We do not sell or share your data with advertisers.</p>
+    </div>
+
+    <p class="result">Questions? Email hr.autohire@gmail.com.</p>
+</div>
+</body>
+</html>
