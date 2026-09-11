@@ -3,6 +3,10 @@
 <head>
     <meta charset="utf-8">
     <title>AutoHire — Sign In</title>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+    <link rel="icon" href="{{ url_for('static', filename='favicon-32.png') }}" sizes="32x32" type="image/png">
+    <link rel="icon" href="{{ url_for('static', filename='favicon-16.png') }}" sizes="16x16" type="image/png">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
     <meta name="description" content="An AI-driven hiring pipeline: publish a role, candidates apply with just a resume, and AI screens, interviews, and evaluates them end to end.">
 
     <meta property="og:type" content="website">
@@ -23,7 +27,10 @@
 </head>
 <body>
 <div class="wrap" style="max-width: 420px; padding-top: 120px; text-align: center;">
-    <h1 style="justify-content: center;">AutoHire</h1>
+    <h1 style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+        <img src="{{ url_for('static', filename='favicon.svg') }}" alt="" width="36" height="36" style="border-radius: 8px;">
+        AutoHire
+    </h1>
     <p class="subtitle">Sign in to manage your roles and candidates</p>
 
     <div class="card">

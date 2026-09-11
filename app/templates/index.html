@@ -3,12 +3,16 @@
 <head>
     <meta charset="utf-8">
     <title>AutoHire</title>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+    <link rel="icon" href="{{ url_for('static', filename='favicon-32.png') }}" sizes="32x32" type="image/png">
+    <link rel="icon" href="{{ url_for('static', filename='favicon-16.png') }}" sizes="16x16" type="image/png">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 <div class="app-shell">
     <div class="nav">
-        <span class="nav-brand">AutoHire</span>
+        <span class="nav-brand"><img src="{{ url_for('static', filename='favicon.svg') }}" alt="" width="22" height="22"> AutoHire</span>
         <span class="nav-subtitle" style="font-size:12px;color:var(--color-neutral-600);margin-right:auto;">Recruiter workspace · protected</span>
         <span style="font-size:12px;color:var(--color-neutral-600);margin-right:12px;">{{ user_name }}</span>
         <a href="/logout" style="font-size:12px;color:var(--color-neutral-600);margin-right:16px;">Sign out</a>

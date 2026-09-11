@@ -3,11 +3,15 @@
 <head>
     <meta charset="utf-8">
     <title>AutoHire — Apply</title>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+    <link rel="icon" href="{{ url_for('static', filename='favicon-32.png') }}" sizes="32x32" type="image/png">
+    <link rel="icon" href="{{ url_for('static', filename='favicon-16.png') }}" sizes="16x16" type="image/png">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 <div class="wrap">
-    <div style="font-family:var(--font-heading);font-size:15px;font-weight:600;letter-spacing:.02em;">AutoHire</div>
+    <div style="font-family:var(--font-heading);font-size:15px;font-weight:600;letter-spacing:.02em;display:flex;align-items:center;gap:7px;"><img src="{{ url_for('static', filename='favicon.svg') }}" alt="" width="18" height="18" style="border-radius:5px;">AutoHire</div>
     <hr class="hr" style="margin:12px 0 18px;">
 
     {% if error %}

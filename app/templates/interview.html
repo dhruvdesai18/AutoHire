@@ -3,25 +3,29 @@
 <head>
     <meta charset="utf-8">
     <title>AutoHire — Interview</title>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+    <link rel="icon" href="{{ url_for('static', filename='favicon-32.png') }}" sizes="32x32" type="image/png">
+    <link rel="icon" href="{{ url_for('static', filename='favicon-16.png') }}" sizes="16x16" type="image/png">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 {% if error %}
 <div class="wrap">
-    <div style="font-family:var(--font-heading);font-size:15px;font-weight:600;">AutoHire</div>
+    <div style="font-family:var(--font-heading);font-size:15px;font-weight:600;display:flex;align-items:center;gap:7px;"><img src="{{ url_for('static', filename='favicon.svg') }}" alt="" width="18" height="18" style="border-radius:5px;">AutoHire</div>
     <hr class="hr" style="margin:12px 0 18px;">
     <div class="error">{{ error }}</div>
 </div>
 {% elif submitted %}
 <div class="wrap">
-    <div style="font-family:var(--font-heading);font-size:15px;font-weight:600;">AutoHire</div>
+    <div style="font-family:var(--font-heading);font-size:15px;font-weight:600;display:flex;align-items:center;gap:7px;"><img src="{{ url_for('static', filename='favicon.svg') }}" alt="" width="18" height="18" style="border-radius:5px;">AutoHire</div>
     <hr class="hr" style="margin:12px 0 22px;">
     <h3 style="font-size:27px;font-weight:400;margin-bottom:12px;">Submitted.</h3>
     <p class="result" style="margin-top:0;">Your answers are in. We'll be in touch with next steps by email.</p>
 </div>
 {% else %}
 <div class="wrap" id="step-intro">
-    <div style="font-family:var(--font-heading);font-size:15px;font-weight:600;">AutoHire</div>
+    <div style="font-family:var(--font-heading);font-size:15px;font-weight:600;display:flex;align-items:center;gap:7px;"><img src="{{ url_for('static', filename='favicon.svg') }}" alt="" width="18" height="18" style="border-radius:5px;">AutoHire</div>
     <hr class="hr" style="margin:12px 0 18px;">
     <div class="kick">Shortlisted</div>
     <h3 style="font-size:29px;font-weight:400;margin:8px 0 16px;">Recorded assessment</h3>
