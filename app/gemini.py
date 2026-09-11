@@ -69,14 +69,24 @@ def generate_interview_prep(resume_text: str, job_description: str) -> dict:
     return _generate_json(INTERVIEW_PREP_SYSTEM_INSTRUCTION, user_text)
 
 
-JD_FORMAT_SYSTEM_INSTRUCTION = """You are given a raw job description. Organize it into
-clear sections using only the content actually present in the text — do not invent or
-add any details that aren't there. Typical sections include an overview, responsibilities,
-requirements/qualifications, and anything else actually present (e.g. benefits, about the
-company). Use whatever sections genuinely fit the content; skip ones that don't apply.
+JD_FORMAT_SYSTEM_INSTRUCTION = """You are given a raw job description, however it was
+typed or pasted — it may already have line breaks and bullets, or it may be one run-on
+block of text with no formatting at all. Organize it into clear sections using only the
+content actually present in the text — do not invent or add any details that aren't there.
+Typical sections include an overview, responsibilities, requirements/qualifications, and
+anything else actually present (e.g. job details, benefits, about the company). Use
+whatever sections genuinely fit the content; skip ones that don't apply.
 
-For each section, use "bullets" if the content is naturally a list (responsibilities,
-requirements, etc.), or "content" for a short narrative paragraph (e.g. an overview).
+For each section, decide "bullets" vs "content" based on what the information actually is,
+not on whether the source text happens to have line breaks in it:
+- Use "bullets" for anything that is really a list of separate, discrete facts or items —
+  responsibilities, requirements, benefits, and also short metadata facts like location,
+  working model, employment type, or salary. If several such facts are run together in one
+  sentence with no separators (e.g. "Location: X Working model: Y Salary: Z"), split them
+  into one bullet per fact — never leave discrete facts merged into a single line or
+  paragraph just because the source text had no line breaks between them.
+- Use "content" only for genuine flowing prose that reads as connected sentences, like an
+  overview or a company description.
 
 Return only JSON in this exact structure, nothing else:
 {
