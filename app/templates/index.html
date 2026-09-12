@@ -15,6 +15,7 @@
         <span class="nav-brand"><img src="{{ url_for('static', filename='favicon.svg') }}" alt="" width="22" height="22"> AutoHire</span>
         <span class="nav-subtitle" style="font-size:12px;color:var(--color-neutral-600);margin-right:auto;">Recruiter workspace · protected</span>
         <span style="font-size:12px;color:var(--color-neutral-600);margin-right:12px;">{{ user_name }}</span>
+        <a href="#" id="btn-take-tour" style="font-size:12px;color:var(--color-neutral-600);margin-right:16px;">Take a tour</a>
         <a href="/logout" style="font-size:12px;color:var(--color-neutral-600);margin-right:16px;">Sign out</a>
         <button class="btn btn-primary" id="btn-open-publish">Publish a role</button>
     </div>
@@ -48,6 +49,7 @@
 
 <div id="publish-modal-mount"></div>
 <div id="welcome-modal-mount"></div>
+<div id="tour-overlay-mount"></div>
 
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 <script>
@@ -512,12 +514,17 @@
                         <strong>3. You review</strong> — come back here to see scores, listen to what candidates said, and see who advanced.
                     </div>
                     <div class="dialog-actions">
-                        <button class="btn btn-primary" id="btn-welcome-done">Get started</button>
+                        <button class="btn btn-secondary" id="btn-welcome-skip">Skip</button>
+                        <button class="btn btn-primary" id="btn-welcome-done">Show me around</button>
                     </div>
                 </div>
             </div>
         `;
-        document.getElementById("btn-welcome-done").addEventListener("click", closeWelcomeModal);
+        document.getElementById("btn-welcome-skip").addEventListener("click", () => closeWelcomeModal());
+        document.getElementById("btn-welcome-done").addEventListener("click", () => {
+            closeWelcomeModal();
+            startTour();
+        });
     }
 
     function closeWelcomeModal() {
@@ -528,6 +535,133 @@
             // ignore — worst case the modal reappears next visit
         }
     }
+
+    // ---------- Guided tour ----------
+
+    const TOUR_STEPS = [
+        {
+            target: "#btn-open-publish",
+            title: "1. Publish a role",
+            text: "Start here. Click this to open the publish form.",
+            before: () => closePublishModal(),
+        },
+        {
+            target: "#job-title",
+            title: "2. Enter role details",
+            text: "Enter the role name here, then the full description below it. AutoHire reformats it into clean sections for candidates automatically.",
+            before: () => openPublishModal(),
+        },
+        {
+            target: "#btn-publish",
+            title: "3. Publish it",
+            text: "Click here to publish. You'll get a shareable application link right away.",
+        },
+        {
+            target: "#roles-list",
+            title: "4. Share the link and wait",
+            text: "Copy that link and send it to candidates — no account needed on their end. Once someone applies, they show up right here in this list with their score.",
+            before: () => closePublishModal(),
+        },
+        {
+            target: "#main-col",
+            title: "5. Evaluate the interview",
+            text: "Once a candidate finishes their recorded assessment, an Evaluate button appears next to them in this table. Click it to score their answers and see the final decision.",
+        },
+    ];
+
+    let tourStepIndex = 0;
+
+    function startTour() {
+        tourStepIndex = 0;
+        runTourStep();
+    }
+
+    function runTourStep() {
+        document.querySelectorAll(".tour-spotlight").forEach((el) => el.classList.remove("tour-spotlight"));
+
+        if (tourStepIndex >= TOUR_STEPS.length) {
+            endTour();
+            return;
+        }
+
+        const step = TOUR_STEPS[tourStepIndex];
+        if (step.before) step.before();
+
+        const target = document.querySelector(step.target);
+        if (!target) {
+            tourStepIndex += 1;
+            runTourStep();
+            return;
+        }
+
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        target.classList.add("tour-spotlight");
+
+        // give scrollIntoView a moment to settle before measuring position
+        setTimeout(() => positionTourCallout(target, step), 120);
+    }
+
+    function positionTourCallout(target, step) {
+        const rect = target.getBoundingClientRect();
+        const calloutWidth = 280;
+        const estimatedHeight = 170;
+        const margin = 14;
+        const viewportPad = 12;
+
+        // Prefer just below the target, then just above it — but always clamp
+        // fully inside the viewport so a very tall target (e.g. a whole column)
+        // can never push the callout off-screen.
+        let placement = "below";
+        let naturalTop = rect.bottom + margin;
+        if (naturalTop + estimatedHeight > window.innerHeight - viewportPad) {
+            placement = "above";
+            naturalTop = rect.top - margin - estimatedHeight;
+        }
+        const top = Math.min(
+            Math.max(naturalTop, viewportPad),
+            window.innerHeight - estimatedHeight - viewportPad
+        );
+        const showArrow = top === naturalTop;
+
+        let left = rect.left + rect.width / 2 - calloutWidth / 2;
+        left = Math.min(Math.max(left, viewportPad), window.innerWidth - calloutWidth - viewportPad);
+        const arrowLeft = Math.min(Math.max(rect.left + rect.width / 2 - left - 6, 12), calloutWidth - 24);
+
+        const isLast = tourStepIndex === TOUR_STEPS.length - 1;
+
+        document.getElementById("tour-overlay-mount").innerHTML = `
+            <div class="tour-callout fade-in" style="top:${top}px; left:${left}px;">
+                ${showArrow ? `<div class="tour-arrow" style="
+                    ${placement === "below" ? "top:-6px;" : "bottom:-6px;"}
+                    left:${arrowLeft}px;"></div>` : ""}
+                <div class="tour-callout-title">${step.title}</div>
+                <div class="tour-callout-text">${step.text}</div>
+                <div class="tour-callout-actions">
+                    <span class="tour-step-count">${tourStepIndex + 1} of ${TOUR_STEPS.length}</span>
+                    <div style="display:flex;gap:6px;">
+                        <button class="btn btn-secondary" style="padding:5px 10px;font-size:12px;" id="tour-skip">Skip tour</button>
+                        <button class="btn btn-primary" style="padding:5px 10px;font-size:12px;" id="tour-next">${isLast ? "Done" : "Next"}</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.getElementById("tour-next").addEventListener("click", () => {
+            tourStepIndex += 1;
+            runTourStep();
+        });
+        document.getElementById("tour-skip").addEventListener("click", endTour);
+    }
+
+    function endTour() {
+        document.querySelectorAll(".tour-spotlight").forEach((el) => el.classList.remove("tour-spotlight"));
+        document.getElementById("tour-overlay-mount").innerHTML = "";
+        closePublishModal();
+    }
+
+    document.getElementById("btn-take-tour").addEventListener("click", (e) => {
+        e.preventDefault();
+        startTour();
+    });
 
     maybeShowWelcomeModal();
     loadJobs();

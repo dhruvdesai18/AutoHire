@@ -200,6 +200,29 @@ textarea.input { min-height: 90px; resize: vertical; line-height: 1.5; }
 .dialog-body { font-size: 14px; opacity: 0.85; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-2); }
 
+/* — guided tour — */
+.tour-spotlight {
+    position: relative; z-index: 201;
+    box-shadow: 0 0 0 9999px color-mix(in srgb, var(--color-neutral-900) 60%, transparent);
+    border-radius: var(--radius-md);
+    transition: box-shadow 0.2s ease;
+}
+.tour-callout {
+    position: fixed; z-index: 202; width: 280px;
+    background: var(--color-surface); border: 1px solid var(--color-divider);
+    border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+    padding: var(--space-3);
+}
+.tour-callout .tour-arrow {
+    position: absolute; width: 12px; height: 12px;
+    background: var(--color-surface); border: 1px solid var(--color-divider);
+    transform: rotate(45deg);
+}
+.tour-callout-title { font-weight: 600; margin-bottom: 4px; font-size: 14px; }
+.tour-callout-text { color: var(--color-neutral-700); font-size: 13px; line-height: 1.5; }
+.tour-callout-actions { display: flex; justify-content: space-between; align-items: center; margin-top: var(--space-3); }
+.tour-step-count { font-size: 11px; color: var(--color-neutral-600); }
+
 /* ══════════════ App-specific layout ══════════════ */
 
 .wrap { max-width: 560px; margin: 0 auto; padding: 52px 22px 100px; }
