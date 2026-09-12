@@ -547,24 +547,29 @@
         },
         {
             target: "#job-title",
-            title: "2. Enter role details",
-            text: "Enter the role name here, then the full description below it. AutoHire reformats it into clean sections for candidates automatically.",
+            title: "2. Enter role title",
+            text: "Enter the role name here — e.g. \"Data Analyst\".",
             before: () => openPublishModal(),
         },
         {
+            target: "#job-description",
+            title: "3. Enter job description",
+            text: "Paste the full job description here. AutoHire reformats it into clean sections for candidates automatically.",
+        },
+        {
             target: "#btn-publish",
-            title: "3. Publish it",
+            title: "4. Publish it",
             text: "Click here to publish. You'll get a shareable application link right away.",
         },
         {
             target: "#roles-list",
-            title: "4. Share the link and wait",
+            title: "5. Share the link and wait",
             text: "Copy that link and send it to candidates — no account needed on their end. Once someone applies, they show up right here in this list with their score.",
             before: () => closePublishModal(),
         },
         {
             target: "#main-col",
-            title: "5. Evaluate the interview",
+            title: "6. Evaluate the interview",
             text: "Once a candidate finishes their recorded assessment, an Evaluate button appears next to them in this table. Click it to score their answers and see the final decision.",
         },
     ];
@@ -608,24 +613,44 @@
         const margin = 14;
         const viewportPad = 12;
 
-        // Prefer just below the target, then just above it — but always clamp
-        // fully inside the viewport so a very tall target (e.g. a whole column)
-        // can never push the callout off-screen.
-        let placement = "below";
-        let naturalTop = rect.bottom + margin;
-        if (naturalTop + estimatedHeight > window.innerHeight - viewportPad) {
-            placement = "above";
-            naturalTop = rect.top - margin - estimatedHeight;
-        }
-        const top = Math.min(
-            Math.max(naturalTop, viewportPad),
-            window.innerHeight - estimatedHeight - viewportPad
-        );
-        const showArrow = top === naturalTop;
+        // A target inside the publish dialog (title/description fields, the
+        // publish button) must never be covered by the callout — the whole
+        // point is to let the user actually click into and fill those fields.
+        // Anchor to the dialog's own box and place the callout beside it
+        // instead of directly above/below the specific field.
+        const dialog = target.closest(".dialog");
+        let top, left, showArrow = false, placement = "below", arrowLeft = 0;
 
-        let left = rect.left + rect.width / 2 - calloutWidth / 2;
-        left = Math.min(Math.max(left, viewportPad), window.innerWidth - calloutWidth - viewportPad);
-        const arrowLeft = Math.min(Math.max(rect.left + rect.width / 2 - left - 6, 12), calloutWidth - 24);
+        if (dialog) {
+            const dRect = dialog.getBoundingClientRect();
+            const roomRight = window.innerWidth - dRect.right;
+            const roomLeft = dRect.left;
+            const onRight = roomRight >= calloutWidth + margin + viewportPad || roomRight >= roomLeft;
+
+            left = onRight ? dRect.right + margin : dRect.left - margin - calloutWidth;
+            left = Math.min(Math.max(left, viewportPad), window.innerWidth - calloutWidth - viewportPad);
+
+            top = rect.top + rect.height / 2 - estimatedHeight / 2;
+            top = Math.min(Math.max(top, viewportPad), window.innerHeight - estimatedHeight - viewportPad);
+        } else {
+            // Prefer just below the target, then just above it — but always clamp
+            // fully inside the viewport so a very tall target (e.g. a whole column)
+            // can never push the callout off-screen.
+            let naturalTop = rect.bottom + margin;
+            if (naturalTop + estimatedHeight > window.innerHeight - viewportPad) {
+                placement = "above";
+                naturalTop = rect.top - margin - estimatedHeight;
+            }
+            top = Math.min(
+                Math.max(naturalTop, viewportPad),
+                window.innerHeight - estimatedHeight - viewportPad
+            );
+            showArrow = top === naturalTop;
+
+            left = rect.left + rect.width / 2 - calloutWidth / 2;
+            left = Math.min(Math.max(left, viewportPad), window.innerWidth - calloutWidth - viewportPad);
+            arrowLeft = Math.min(Math.max(rect.left + rect.width / 2 - left - 6, 12), calloutWidth - 24);
+        }
 
         const isLast = tourStepIndex === TOUR_STEPS.length - 1;
 
