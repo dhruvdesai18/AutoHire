@@ -47,6 +47,7 @@
 </div>
 
 <div id="publish-modal-mount"></div>
+<div id="welcome-modal-mount"></div>
 
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 <script>
@@ -113,7 +114,7 @@
 
         const listEl = document.getElementById("roles-list");
         if (!jobs.length) {
-            listEl.innerHTML = '<div class="empty-state fade-in" style="padding:20px 14px;">No roles yet.</div>';
+            listEl.innerHTML = '<div class="empty-state fade-in" style="padding:20px 14px;">No roles yet.<br>Publish your first role below to get a shareable link.</div>';
             renderMainCol();
             renderDossier();
             return;
@@ -486,6 +487,49 @@
     document.getElementById("btn-open-publish").addEventListener("click", openPublishModal);
     document.getElementById("btn-open-publish-2").addEventListener("click", openPublishModal);
 
+    // ---------- First-time welcome ----------
+
+    function maybeShowWelcomeModal() {
+        let seen = false;
+        try {
+            seen = localStorage.getItem("autohire_welcome_seen") === "1";
+        } catch (e) {
+            return; // storage unavailable — skip rather than risk showing it every time
+        }
+        if (seen) return;
+
+        document.getElementById("welcome-modal-mount").innerHTML = `
+            <div class="dialog-backdrop" id="welcome-backdrop">
+                <div class="dialog fade-in">
+                    <div class="dialog-title">Welcome to AutoHire</div>
+                    <div class="dialog-body">
+                        Three steps, no manual screening:
+                        <br><br>
+                        <strong>1. Publish a role</strong> — write a title and description, get a shareable application link.
+                        <br><br>
+                        <strong>2. Candidates apply</strong> — they upload just a resume. AI parses it, scores it against the role, and shortlisted candidates are emailed a link to a short recorded assessment automatically.
+                        <br><br>
+                        <strong>3. You review</strong> — come back here to see scores, listen to what candidates said, and see who advanced.
+                    </div>
+                    <div class="dialog-actions">
+                        <button class="btn btn-primary" id="btn-welcome-done">Get started</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.getElementById("btn-welcome-done").addEventListener("click", closeWelcomeModal);
+    }
+
+    function closeWelcomeModal() {
+        document.getElementById("welcome-modal-mount").innerHTML = "";
+        try {
+            localStorage.setItem("autohire_welcome_seen", "1");
+        } catch (e) {
+            // ignore — worst case the modal reappears next visit
+        }
+    }
+
+    maybeShowWelcomeModal();
     loadJobs();
 </script>
 </body>
