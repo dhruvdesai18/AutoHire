@@ -18,7 +18,7 @@
         <div class="error">{{ error }}</div>
     {% else %}
         <div id="step-apply-form">
-            <div class="kick">{{ (posted + " · remote") if posted else "" }}</div>
+            <div class="kick">{{ posted if posted else "" }}</div>
             <h3 style="font-size:29px;font-weight:400;margin:8px 0 16px;">{{ title }}</h3>
 
             {% if sections %}
