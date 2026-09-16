@@ -414,7 +414,7 @@
 
     async function evaluateCandidate(candidateId) {
         const resultEl = document.getElementById("eval-result");
-        resultEl.innerHTML = '<div class="spinner">Diarizing and evaluating (this can take a minute)...</div>';
+        resultEl.innerHTML = '<div class="spinner">Evaluating answers (this can take a minute)...</div>';
 
         const res = await fetch(`/evaluate-interview/${candidateId}`, { method: "POST" });
         const data = await res.json();
