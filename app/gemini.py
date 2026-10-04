@@ -8,22 +8,37 @@ from app.config import GCP_PROJECT_ID
 
 client = genai.Client(vertexai=True, project=GCP_PROJECT_ID, location="global")
 
+_MAX_JSON_ATTEMPTS = 3
+
+
+def _call_json(system_instruction: str, contents: list) -> dict:
+    """Call Gemini expecting a JSON response, retrying if the model emits
+    occasionally-malformed JSON (e.g. a dropped bracket on a long list)."""
+    generate_content_config = types.GenerateContentConfig(
+        temperature=0.2,
+        system_instruction=[types.Part.from_text(text=system_instruction)],
+        response_mime_type="application/json",
+    )
+    last_error = None
+    for _ in range(_MAX_JSON_ATTEMPTS):
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=contents,
+            config=generate_content_config,
+        )
+        cleaned = re.sub(r"```json|```", "", response.text).strip()
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError as e:
+            last_error = e
+    raise last_error
+
 
 def _generate_json(system_instruction: str, user_text: str) -> dict:
     contents = [
         types.Content(role="user", parts=[types.Part.from_text(text=user_text)])
     ]
-    generate_content_config = types.GenerateContentConfig(
-        temperature=0.2,
-        system_instruction=[types.Part.from_text(text=system_instruction)],
-    )
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=contents,
-        config=generate_content_config,
-    )
-    cleaned = re.sub(r"```json|```", "", response.text).strip()
-    return json.loads(cleaned)
+    return _call_json(system_instruction, contents)
 
 
 SCORING_SYSTEM_INSTRUCTION = """You are an ATS (Applicant Tracking System) resume screener.
@@ -144,16 +159,4 @@ def evaluate_interview(question_recordings: list) -> dict:
             parts.append(types.Part.from_text(text="(candidate did not answer this question)"))
 
     contents = [types.Content(role="user", parts=parts)]
-    generate_content_config = types.GenerateContentConfig(
-        temperature=0.2,
-        system_instruction=[
-            types.Part.from_text(text=INTERVIEW_EVAL_SYSTEM_INSTRUCTION)
-        ],
-    )
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=contents,
-        config=generate_content_config,
-    )
-    cleaned = re.sub(r"```json|```", "", response.text).strip()
-    return json.loads(cleaned)
+    return _call_json(INTERVIEW_EVAL_SYSTEM_INSTRUCTION, contents)

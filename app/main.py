@@ -1,8 +1,9 @@
+import json
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from io import BytesIO
 
-from flask import Flask, render_template, request, jsonify, send_file, session, redirect
+from flask import Flask, Response, render_template, request, jsonify, send_file, session, redirect
 from google.auth.transport import requests as google_auth_requests
 from google.cloud import firestore
 from google.oauth2 import id_token as google_id_token
@@ -23,6 +24,7 @@ from app.gemini import (
     score_resume,
 )
 from app.gmail import send_email
+from app.role_planner import generate_team_job_descriptions
 
 ASSESSMENT_WINDOW = timedelta(hours=24)
 
@@ -187,6 +189,27 @@ def list_jobs():
     jobs.sort(key=lambda j: j.pop("_sort_key"), reverse=True)
 
     return jsonify({"jobs": jobs})
+
+
+@app.route("/jobs/generate-team", methods=["POST"])
+@require_login
+def generate_team():
+    data = request.get_json(silent=True, force=True) or {}
+    project_description = (data.get("project_description") or "").strip()
+    if not project_description:
+        return jsonify({"error": "project_description is required"}), 400
+
+    max_revisions = data.get("max_revisions", 2)
+    try:
+        max_revisions = max(0, min(int(max_revisions), 5))
+    except (TypeError, ValueError):
+        max_revisions = 2
+
+    def stream():
+        for event in generate_team_job_descriptions(project_description, max_revisions):
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return Response(stream(), mimetype="text/event-stream")
 
 
 @app.route("/jobs/<job_id>", methods=["DELETE"])

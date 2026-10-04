@@ -17,6 +17,7 @@
         <span style="font-size:12px;color:var(--color-neutral-600);margin-right:12px;">{{ user_name }}</span>
         <a href="#" id="btn-take-tour" style="font-size:12px;color:var(--color-neutral-600);margin-right:16px;">Take a tour</a>
         <a href="/logout" style="font-size:12px;color:var(--color-neutral-600);margin-right:16px;">Sign out</a>
+        <button class="btn btn-secondary" id="btn-open-team-plan" style="margin-right:10px;">Describe a project</button>
         <button class="btn btn-primary" id="btn-open-publish">Publish a role</button>
     </div>
 
@@ -48,6 +49,7 @@
 </div>
 
 <div id="publish-modal-mount"></div>
+<div id="team-plan-modal-mount"></div>
 <div id="welcome-modal-mount"></div>
 <div id="tour-overlay-mount"></div>
 
@@ -431,7 +433,8 @@
 
     // ---------- Publish role dialog ----------
 
-    function openPublishModal() {
+    function openPublishModal(prefill) {
+        prefill = prefill || {};
         document.getElementById("publish-modal-mount").innerHTML = `
             <div class="dialog-backdrop" id="publish-backdrop">
                 <div class="dialog fade-in">
@@ -447,6 +450,8 @@
                 </div>
             </div>
         `;
+        document.getElementById("job-title").value = prefill.title || "";
+        document.getElementById("job-description").value = prefill.description || "";
         document.getElementById("publish-backdrop").addEventListener("click", (e) => {
             if (e.target.id === "publish-backdrop") closePublishModal();
         });
@@ -486,8 +491,189 @@
         loadJobs();
     }
 
-    document.getElementById("btn-open-publish").addEventListener("click", openPublishModal);
-    document.getElementById("btn-open-publish-2").addEventListener("click", openPublishModal);
+    document.getElementById("btn-open-publish").addEventListener("click", () => openPublishModal());
+    document.getElementById("btn-open-publish-2").addEventListener("click", () => openPublishModal());
+
+    // ---------- Describe a project -> team plan ----------
+
+    function escapeHtml(str) {
+        const div = document.createElement("div");
+        div.textContent = str == null ? "" : String(str);
+        return div.innerHTML;
+    }
+
+    let teamPlanRoles = [];
+    let teamPlanResults = [];
+    let teamPlanStreaming = false;
+
+    function openTeamPlanModal() {
+        teamPlanRoles = [];
+        teamPlanResults = [];
+        teamPlanStreaming = false;
+        document.getElementById("team-plan-modal-mount").innerHTML = `
+            <div class="dialog-backdrop" id="team-plan-backdrop">
+                <div class="dialog fade-in" style="width:min(720px,100%);max-height:85vh;overflow-y:auto;">
+                    <div class="dialog-title">Describe a project</div>
+                    <div class="dialog-body">Describe what you're building in plain language. AI works out which roles the project actually needs and drafts a reviewed job description for each one — review and publish the ones you want.</div>
+                    <div class="field"><label>Project description</label><textarea class="input" id="project-description" placeholder="e.g. We're building a mobile app that lets users…" style="min-height:120px;"></textarea></div>
+                    <div class="field"><label>Max revisions per role</label><input class="input" id="max-revisions" type="number" min="0" max="5" value="2" style="max-width:100px;"></div>
+                    <div id="team-plan-result"></div>
+                    <div class="dialog-actions">
+                        <button class="btn btn-secondary" id="btn-cancel-team-plan">Close</button>
+                        <button class="btn btn-primary" id="btn-generate-team">Generate team</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.getElementById("team-plan-backdrop").addEventListener("click", (e) => {
+            if (e.target.id === "team-plan-backdrop" && !teamPlanStreaming) closeTeamPlanModal();
+        });
+        document.getElementById("btn-cancel-team-plan").addEventListener("click", () => {
+            if (!teamPlanStreaming) closeTeamPlanModal();
+        });
+        document.getElementById("btn-generate-team").addEventListener("click", submitTeamPlan);
+    }
+
+    function closeTeamPlanModal() {
+        document.getElementById("team-plan-modal-mount").innerHTML = "";
+    }
+
+    function teamPlanRoleCardHtml(index) {
+        const role = teamPlanRoles[index];
+        const finalized = teamPlanResults.find((r) => r.roleIndex === index);
+        const countPrefix = role.count > 1 ? `${role.count}x · ` : "";
+        if (finalized) {
+            const jd = finalized.jd || {};
+            return `
+                <div class="card" style="margin-top:10px;">
+                    <div class="card-kicker">${countPrefix}Ready</div>
+                    <div class="card-title">${escapeHtml(jd.title || role.title)}</div>
+                    <p class="card-body">${escapeHtml(jd.about_the_role || role.rationale)}</p>
+                    <button class="btn btn-secondary" style="align-self:flex-start;" data-use-role="${index}">Use this role</button>
+                </div>
+            `;
+        }
+        return `
+            <div class="card" style="margin-top:10px;">
+                <div class="card-kicker">${countPrefix}Drafting…</div>
+                <div class="card-title">${escapeHtml(role.title)}</div>
+                <p class="card-body">${escapeHtml(role.rationale)}</p>
+            </div>
+        `;
+    }
+
+    function wireUseRoleButtons(container) {
+        container.querySelectorAll("[data-use-role]").forEach((btn) => {
+            btn.addEventListener("click", () => useGeneratedRole(parseInt(btn.dataset.useRole, 10)));
+        });
+    }
+
+    function renderTeamPlanProgress(statusText) {
+        const resultEl = document.getElementById("team-plan-result");
+        if (!resultEl) return;
+        const cards = teamPlanRoles.map((_, i) => teamPlanRoleCardHtml(i)).join("");
+        resultEl.innerHTML = `<div class="spinner">${escapeHtml(statusText)}</div>${cards}`;
+        wireUseRoleButtons(resultEl);
+    }
+
+    async function submitTeamPlan() {
+        const projectDescription = document.getElementById("project-description").value.trim();
+        const maxRevisions = document.getElementById("max-revisions").value;
+        const resultEl = document.getElementById("team-plan-result");
+        if (!projectDescription) {
+            resultEl.innerHTML = '<div class="error">Describe the project first.</div>';
+            return;
+        }
+
+        teamPlanStreaming = true;
+        teamPlanRoles = [];
+        teamPlanResults = [];
+        document.getElementById("btn-generate-team").disabled = true;
+        document.getElementById("btn-cancel-team-plan").disabled = true;
+        resultEl.innerHTML = '<div class="spinner">Planning the team…</div>';
+
+        try {
+            const res = await fetch("/jobs/generate-team", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ project_description: projectDescription, max_revisions: maxRevisions }),
+            });
+            if (!res.ok || !res.body) {
+                const data = await res.json().catch(() => ({}));
+                resultEl.innerHTML = `<div class="error">${escapeHtml(data.error || "Failed to start generation.")}</div>`;
+                showToast(data.error || "Failed to start generation.", "error");
+                return;
+            }
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const parts = buffer.split("\n\n");
+                buffer = parts.pop();
+                for (const part of parts) {
+                    const line = part.split("\n").find((l) => l.startsWith("data: "));
+                    if (!line) continue;
+                    handleTeamPlanEvent(JSON.parse(line.slice(6)));
+                }
+            }
+        } catch (e) {
+            resultEl.innerHTML = '<div class="error">Something went wrong while generating the team.</div>';
+            showToast("Team generation failed.", "error");
+        } finally {
+            teamPlanStreaming = false;
+            document.getElementById("btn-generate-team").disabled = false;
+            document.getElementById("btn-cancel-team-plan").disabled = false;
+        }
+    }
+
+    function handleTeamPlanEvent(event) {
+        if (event.type === "team_planned") {
+            teamPlanRoles = event.roles;
+            const count = event.roles.length;
+            renderTeamPlanProgress(`Team planned — ${count} role${count === 1 ? "" : "s"}. Drafting job descriptions…`);
+        } else if (event.type === "role_start") {
+            renderTeamPlanProgress(`Drafting role ${event.role_index + 1} of ${teamPlanRoles.length}: ${event.role.title}…`);
+        } else if (event.type === "review_ready" && !event.approved) {
+            const role = teamPlanRoles[event.role_index];
+            renderTeamPlanProgress(`Revising role ${event.role_index + 1} of ${teamPlanRoles.length}: ${role ? role.title : ""}…`);
+        } else if (event.type === "role_finalized") {
+            teamPlanResults.push({ roleIndex: event.role_index, role: event.role, jd: event.jd });
+            renderTeamPlanProgress(`${teamPlanResults.length} of ${teamPlanRoles.length} role${teamPlanRoles.length === 1 ? "" : "s"} ready…`);
+        } else if (event.type === "done") {
+            const resultEl = document.getElementById("team-plan-result");
+            const cards = teamPlanRoles.map((_, i) => teamPlanRoleCardHtml(i)).join("");
+            resultEl.innerHTML = `<p class="card-body" style="margin-top:4px;">Done. Review each role below, then publish the ones you want.</p>${cards}`;
+            wireUseRoleButtons(resultEl);
+        } else if (event.type === "error") {
+            document.getElementById("team-plan-result").innerHTML = `<div class="error">${escapeHtml(event.message)}</div>`;
+            showToast("Team generation failed.", "error");
+        }
+    }
+
+    function useGeneratedRole(index) {
+        const finalized = teamPlanResults.find((r) => r.roleIndex === index);
+        if (!finalized) return;
+        const jd = finalized.jd || {};
+        const sections = [];
+        if (jd.about_the_role) sections.push(jd.about_the_role);
+        if (jd.responsibilities && jd.responsibilities.length) {
+            sections.push("Responsibilities:\n" + jd.responsibilities.map((r) => `- ${r}`).join("\n"));
+        }
+        if (jd.required_skills && jd.required_skills.length) {
+            sections.push("Required skills:\n" + jd.required_skills.map((s) => `- ${s}`).join("\n"));
+        }
+        if (jd.preferred_skills && jd.preferred_skills.length) {
+            sections.push("Preferred skills:\n" + jd.preferred_skills.map((s) => `- ${s}`).join("\n"));
+        }
+        closeTeamPlanModal();
+        openPublishModal({ title: jd.title || finalized.role.title, description: sections.join("\n\n") });
+    }
+
+    document.getElementById("btn-open-team-plan").addEventListener("click", openTeamPlanModal);
 
     // ---------- First-time welcome ----------
 

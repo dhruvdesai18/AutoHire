@@ -100,3 +100,31 @@ def test_interview_page_shows_error_for_unknown_candidate(client):
 
         res = client.get("/interview/nonexistent-candidate")
         assert b"not found" in res.data.lower()
+
+
+def test_generate_team_requires_auth(client):
+    res = client.post("/jobs/generate-team", json={"project_description": "A project"})
+    assert res.status_code == 401
+
+
+def test_generate_team_rejects_missing_description(logged_in_client):
+    res = logged_in_client.post("/jobs/generate-team", json={})
+    assert res.status_code == 400
+
+
+def test_generate_team_streams_events(logged_in_client):
+    fake_events = [
+        {"type": "team_planned", "roles": [{"title": "Backend Engineer", "count": 1, "rationale": "..."}]},
+        {"type": "done", "results": [{"role": {"title": "Backend Engineer"}, "jd": {"title": "Backend Engineer"}}]},
+    ]
+    with patch("app.main.generate_team_job_descriptions", return_value=iter(fake_events)) as mock_gen:
+        res = logged_in_client.post(
+            "/jobs/generate-team",
+            json={"project_description": "A project", "max_revisions": 1},
+        )
+        assert res.status_code == 200
+        body = res.get_data(as_text=True)
+        assert "team_planned" in body
+        assert "Backend Engineer" in body
+        assert '"type": "done"' in body or '"type":"done"' in body
+        mock_gen.assert_called_once_with("A project", 1)
