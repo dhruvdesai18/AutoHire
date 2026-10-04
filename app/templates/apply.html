@@ -23,7 +23,7 @@
 
             {% if sections %}
                 {% for section in sections %}
-                    <div class="jd-section">
+                    <div class="jd-section fade-in" style="animation-delay:{{ loop.index0 * 0.05 }}s;">
                         <div class="jd-section-heading">{{ section.heading }}</div>
                         {% if section.bullets %}
                             {% for bullet in section.bullets %}
@@ -41,8 +41,24 @@
             <div class="card" style="margin-top:24px;">
                 <div class="card-kicker">Apply</div>
                 <p class="card-body">Your resume is all we need. No forms, no account.</p>
-                <input type="file" id="resume-file" accept=".pdf" style="position:absolute;width:1px;height:1px;opacity:0;">
-                <button id="btn-pick-file" class="btn btn-secondary btn-block" style="justify-content:flex-start;min-height:46px;" type="button">Choose your resume (PDF)</button>
+
+                <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Choose or drop your resume PDF">
+                    <input type="file" id="resume-file" accept=".pdf" style="position:absolute;width:1px;height:1px;opacity:0;">
+                    <div id="dropzone-empty">
+                        <svg width="26" height="26" viewBox="0 0 26 26" fill="none"><path d="M13 17V5M13 5L8 10M13 5l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                        <div>Drop your resume here, or <span class="dropzone-browse">browse</span></div>
+                        <div class="dropzone-hint">PDF only</div>
+                    </div>
+                    <div id="dropzone-file" style="display:none;">
+                        <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M6 2h7l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M13 2v4h4" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+                        <div class="dropzone-filename">
+                            <span class="fname"></span>
+                            <span class="fsize"></span>
+                        </div>
+                        <button type="button" class="dropzone-remove" id="btn-remove-file">Remove</button>
+                    </div>
+                </div>
+
                 <button id="btn-apply" class="btn btn-primary btn-block" style="min-height:46px;">Submit application</button>
                 <div class="result" id="apply-result"></div>
             </div>
@@ -54,10 +70,63 @@
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 <script>
     const fileInput = document.getElementById("resume-file");
-    const pickBtn = document.getElementById("btn-pick-file");
-    pickBtn.addEventListener("click", () => fileInput.click());
+    const dropzone = document.getElementById("dropzone");
+    const dzEmpty = document.getElementById("dropzone-empty");
+    const dzFile = document.getElementById("dropzone-file");
+
+    function formatFileSize(bytes) {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + " KB";
+        return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+    }
+
+    function showSelectedFile(file) {
+        dzFile.querySelector(".fname").textContent = file.name;
+        dzFile.querySelector(".fsize").textContent = formatFileSize(file.size);
+        dzEmpty.style.display = "none";
+        dzFile.style.display = "flex";
+    }
+
+    function clearSelectedFile() {
+        fileInput.value = "";
+        dzEmpty.style.display = "block";
+        dzFile.style.display = "none";
+    }
+
+    dropzone.addEventListener("click", (e) => {
+        if (e.target.closest("#btn-remove-file")) return;
+        fileInput.click();
+    });
+    dropzone.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInput.click(); }
+    });
     fileInput.addEventListener("change", () => {
-        pickBtn.textContent = fileInput.files.length ? fileInput.files[0].name : "Choose your resume (PDF)";
+        if (fileInput.files.length) showSelectedFile(fileInput.files[0]);
+    });
+
+    ["dragenter", "dragover"].forEach((evt) => dropzone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        dropzone.classList.add("dragover");
+    }));
+    ["dragleave", "drop"].forEach((evt) => dropzone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        dropzone.classList.remove("dragover");
+    }));
+    dropzone.addEventListener("drop", (e) => {
+        const file = e.dataTransfer.files[0];
+        if (!file) return;
+        if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+            showToast("Please choose a PDF file.", "error");
+            return;
+        }
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        fileInput.files = dt.files;
+        showSelectedFile(file);
+    });
+    document.getElementById("btn-remove-file").addEventListener("click", (e) => {
+        e.stopPropagation();
+        clearSelectedFile();
     });
 
     document.getElementById("btn-apply").addEventListener("click", async () => {

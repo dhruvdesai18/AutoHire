@@ -47,6 +47,7 @@
     <div class="timer-sticky">
         <span class="timer-caption">Time remaining</span>
         <span class="timer-clock num" id="overall-timer">30:00</span>
+        <div class="timer-progress-track"><div class="timer-progress-fill" id="overall-progress"></div></div>
     </div>
 
     <div id="questions-container"></div>
@@ -114,11 +115,13 @@
 
         if (s.recording) {
             card.style.borderColor = "var(--color-bad)";
+            const pct = Math.max(0, Math.min(100, (s.perQuestionRemaining / PER_QUESTION_SECONDS) * 100));
             controls.innerHTML = `
-                <div style="display:flex;align-items:center;gap:9px;margin:4px 0 10px;">
+                <div style="display:flex;align-items:center;gap:9px;margin:4px 0 6px;">
                     <span class="rec-dot"></span>
                     <span class="num" style="font-size:13px;">Recording · ${formatTime(s.perQuestionRemaining)} left</span>
                 </div>
+                <div class="q-progress-track"><div class="q-progress-fill" style="width:${pct}%;"></div></div>
                 <button class="btn btn-secondary btn-block" style="min-height:46px;" onclick="stopRecording(${i})">Stop recording</button>
             `;
             return;
@@ -222,20 +225,36 @@
 
     document.getElementById("btn-submit").addEventListener("click", submitAssessment);
 
-    document.getElementById("btn-start").addEventListener("click", () => {
-        document.getElementById("step-intro").style.display = "none";
-        document.getElementById("step-live").style.display = "block";
-        renderQuestions();
+    function updateOverallProgress() {
+        const pct = Math.max(0, Math.min(100, (overallRemaining / OVERALL_SECONDS) * 100));
+        const fillEl = document.getElementById("overall-progress");
+        fillEl.style.width = pct + "%";
+        fillEl.classList.toggle("low", overallRemaining <= 300);
+    }
 
-        overallInterval = setInterval(() => {
-            overallRemaining -= 1;
-            const timerEl = document.getElementById("overall-timer");
-            timerEl.textContent = formatTime(Math.max(overallRemaining, 0));
-            timerEl.classList.toggle("low", overallRemaining <= 300);
-            if (overallRemaining <= 0) {
-                submitAssessment();
-            }
-        }, 1000);
+    document.getElementById("btn-start").addEventListener("click", () => {
+        const introEl = document.getElementById("step-intro");
+        const liveEl = document.getElementById("step-live");
+        introEl.style.transition = "opacity 0.22s ease";
+        introEl.style.opacity = "0";
+        setTimeout(() => {
+            introEl.style.display = "none";
+            liveEl.style.display = "block";
+            liveEl.classList.add("fade-in");
+            renderQuestions();
+            updateOverallProgress();
+
+            overallInterval = setInterval(() => {
+                overallRemaining -= 1;
+                const timerEl = document.getElementById("overall-timer");
+                timerEl.textContent = formatTime(Math.max(overallRemaining, 0));
+                timerEl.classList.toggle("low", overallRemaining <= 300);
+                updateOverallProgress();
+                if (overallRemaining <= 0) {
+                    submitAssessment();
+                }
+            }, 1000);
+        }, 200);
     });
 </script>
 {% endif %}
