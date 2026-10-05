@@ -344,6 +344,18 @@ textarea.input { min-height: 90px; resize: vertical; line-height: 1.5; }
 .trail-by.automatic { color: var(--color-accent-700); }
 .trail-by.candidate { color: var(--color-neutral-600); }
 
+/* — tabs (e.g. Description / Explanation on generated role cards) — */
+.tab-group { display: flex; margin: 10px 0 2px; border-bottom: 1px solid var(--color-divider); }
+.tab-btn {
+    background: none; border: none; cursor: pointer; font: inherit;
+    font-family: var(--font-heading); font-weight: 600; font-size: 13px;
+    color: var(--color-neutral-600); padding: 6px 2px; margin-right: 18px;
+    border-bottom: 2px solid transparent;
+    transition: color 0.12s ease, border-color 0.12s ease;
+}
+.tab-btn:hover { color: var(--color-text); }
+.tab-btn[aria-selected="true"] { color: var(--color-accent-700); border-bottom-color: var(--color-accent); }
+
 /* — mobile-style JD / assessment cards (used on /apply and /interview) — */
 
 .jd-section { margin-bottom: 18px; }

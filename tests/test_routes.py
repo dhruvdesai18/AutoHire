@@ -128,3 +128,14 @@ def test_generate_team_streams_events(logged_in_client):
         assert "Backend Engineer" in body
         assert '"type": "done"' in body or '"type":"done"' in body
         mock_gen.assert_called_once_with("A project", 1)
+
+
+def test_team_plan_page_redirects_when_not_logged_in(client):
+    res = client.get("/jobs/team-plan")
+    assert res.status_code == 302
+    assert "/login" in res.headers["Location"]
+
+
+def test_team_plan_page_loads_when_logged_in(logged_in_client):
+    res = logged_in_client.get("/jobs/team-plan")
+    assert res.status_code == 200

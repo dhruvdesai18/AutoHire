@@ -126,6 +126,13 @@ def index():
     )
 
 
+@app.route("/jobs/team-plan")
+def team_plan_page():
+    if not session.get("user_id"):
+        return redirect("/login")
+    return render_template("team_plan.html", user_name=session.get("user_name"))
+
+
 @app.route("/jobs", methods=["POST"])
 @require_login
 def create_job():

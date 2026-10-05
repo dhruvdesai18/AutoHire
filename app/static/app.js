@@ -21,3 +21,9 @@ function showToast(message, type = "info") {
 function skeletonLines(widths) {
     return widths.map((w) => `<div class="skeleton-line w-${w}"></div>`).join("");
 }
+
+function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
+}
