@@ -85,11 +85,11 @@
             ` : ""}
             ${jd.required_skills && jd.required_skills.length ? `
                 <div class="kick" style="margin:14px 0 6px;">Required skills</div>
-                <div style="display:flex;flex-wrap:wrap;gap:6px;">${jd.required_skills.map((s) => `<span class="tag tag-outline">${escapeHtml(s)}</span>`).join(" ")}</div>
+                ${jd.required_skills.map((s) => `<div class="jd-line"><span class="dot">·</span><span>${escapeHtml(s)}</span></div>`).join("")}
             ` : ""}
             ${jd.preferred_skills && jd.preferred_skills.length ? `
                 <div class="kick" style="margin:14px 0 6px;color:var(--color-neutral-600);">Preferred skills</div>
-                <div style="display:flex;flex-wrap:wrap;gap:6px;">${jd.preferred_skills.map((s) => `<span class="tag tag-neutral">${escapeHtml(s)}</span>`).join(" ")}</div>
+                ${jd.preferred_skills.map((s) => `<div class="jd-line"><span class="dot">·</span><span>${escapeHtml(s)}</span></div>`).join("")}
             ` : ""}
         `;
 
