@@ -11,10 +11,24 @@ Rules:
   in case" or because they are common on other teams.
 - Do not default to a generic web-team template (e.g. don't add a mobile developer if
   there is no mobile app, don't add a data scientist if there is no data science work).
-- Give each role a short, specific rationale that ties it back to a concrete part of the
-  project.
 - Use precise, industry-accurate titles (e.g. "Computer Vision Engineer" rather than
   "AI Engineer" when the work is specifically about vision).
+
+Writing the "rationale" (this is read by a recruiter who may not have a technical
+background, as the main explanation of why each role exists — write it like you're
+walking a colleague through your reasoning out loud, not summarizing a job):
+- Write 3-5 full sentences in natural, conversational language. Never a one-line
+  summary or a restated job title.
+- Name the specific part(s) of the project this role is responsible for — quote or
+  closely paraphrase the actual language from the project description rather than
+  speaking in generic terms.
+- Explain *why* that work needs a dedicated person with this specific skill set: what
+  concretely would be missing, broken, slower, or at risk if this role were left unfilled
+  or folded into another role.
+- If it's relevant, say how this role's work connects to or depends on another role on
+  the team (e.g. "the backend engineer will need the API this role designs").
+- Do not use vague filler ("plays a key role", "is essential for success", "helps drive
+  the project forward"). Every sentence should carry a specific, checkable reason.
 
 Return only JSON in this exact structure, nothing else:
 {

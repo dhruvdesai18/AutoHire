@@ -97,9 +97,19 @@
             <p class="card-body" style="margin-top:8px;">${escapeHtml(role.rationale)}</p>
         `;
 
+        const footerHtml = finalized.publishedJobId ? `
+            <div style="display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap;">
+                <span class="tag tag-good">Published</span>
+                <span style="font-size:11px;color:var(--color-neutral-600);word-break:break-all;">${escapeHtml(location.origin)}/apply/${finalized.publishedJobId}</span>
+                <button class="btn btn-ghost" type="button" style="font-size:12px;" data-copy-link="${finalized.publishedJobId}">Copy link</button>
+            </div>
+        ` : `
+            <button class="btn btn-secondary" style="align-self:flex-start;margin-top:12px;" data-use-role="${index}">Publish this role</button>
+        `;
+
         return `
             <div class="card fade-in" style="margin-top:12px;" data-role-index="${index}">
-                <div class="card-kicker">${countPrefix}Ready</div>
+                <div class="card-kicker">${countPrefix}${finalized.publishedJobId ? "Published" : "Ready"}</div>
                 <div class="card-title">${escapeHtml(jd.title || role.title)}</div>
                 <div class="tab-group">
                     <button class="tab-btn" type="button" data-tab="description" aria-selected="${activeTab === "description"}">Description</button>
@@ -107,7 +117,7 @@
                 </div>
                 <div data-tab-panel="description"${activeTab !== "description" ? ' style="display:none;"' : ""}>${descriptionHtml}</div>
                 <div data-tab-panel="explanation"${activeTab !== "explanation" ? ' style="display:none;"' : ""}>${explanationHtml}</div>
-                <button class="btn btn-secondary" style="align-self:flex-start;margin-top:12px;" data-use-role="${index}">Publish this role</button>
+                ${footerHtml}
             </div>
         `;
     }
@@ -128,6 +138,23 @@
         container.querySelectorAll("[data-use-role]").forEach((btn) => {
             btn.addEventListener("click", () => useGeneratedRole(parseInt(btn.dataset.useRole, 10)));
         });
+        container.querySelectorAll("[data-copy-link]").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                navigator.clipboard.writeText(`${location.origin}/apply/${btn.dataset.copyLink}`);
+                showToast("Application link copied.", "success");
+            });
+        });
+    }
+
+    function rerenderCard(index) {
+        const container = document.getElementById("team-plan-result");
+        const oldCard = container.querySelector(`[data-role-index="${index}"]`);
+        if (!oldCard) return;
+        const wrapper = document.createElement("div");
+        wrapper.innerHTML = teamPlanRoleCardHtml(index).trim();
+        const newCard = wrapper.firstElementChild;
+        oldCard.replaceWith(newCard);
+        wireCardInteractions(newCard);
     }
 
     function renderTeamPlanProgress(statusText) {
@@ -233,13 +260,16 @@
         if (jd.preferred_skills && jd.preferred_skills.length) {
             sections.push("Preferred skills:\n" + jd.preferred_skills.map((s) => `- ${s}`).join("\n"));
         }
-        openPublishModal({ title: jd.title || finalized.role.title, description: sections.join("\n\n") });
+        openPublishModal({ title: jd.title || finalized.role.title, description: sections.join("\n\n"), roleIndex: index });
     }
 
     // ---------- Publish role dialog (self-contained on this page) ----------
 
+    let publishingRoleIndex = null;
+
     function openPublishModal(prefill) {
         prefill = prefill || {};
+        publishingRoleIndex = prefill.roleIndex != null ? prefill.roleIndex : null;
         document.getElementById("publish-modal-mount").innerHTML = `
             <div class="dialog-backdrop" id="publish-backdrop">
                 <div class="dialog fade-in">
@@ -291,7 +321,16 @@
         }
 
         showToast("Role published!", "success");
-        window.location.href = "/";
+        closePublishModal();
+
+        if (publishingRoleIndex != null) {
+            const finalized = teamPlanResults.find((r) => r.roleIndex === publishingRoleIndex);
+            if (finalized) {
+                finalized.publishedJobId = data.job_id;
+                rerenderCard(publishingRoleIndex);
+            }
+            publishingRoleIndex = null;
+        }
     }
 
     document.getElementById("btn-generate-team").addEventListener("click", submitTeamPlan);
