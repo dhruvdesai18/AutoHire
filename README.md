@@ -99,13 +99,32 @@ The full pipeline is built, deployed, and working end to end — publish, apply,
 Known limitation: the Gmail OAuth app is currently in Google's "Testing" publishing status, so refresh tokens expire every 7 days and need periodic re-authentication. Moving it to "In production" would remove that limit.
 
 ## Demo
-<img width="731" height="711" alt="Screenshot 2026-07-29 at 21 07 31" src="https://github.com/user-attachments/assets/8e9ac88d-f2f9-4d6f-b336-0198f560dc96" />
 
-<img width="737" height="775" alt="Screenshot 2026-07-29 at 21 07 41" src="https://github.com/user-attachments/assets/6b18db80-6f74-416d-9d38-a5e8cd058d48" />
+Screenshots of the live app. All candidate names, emails and scores shown are synthetic.
 
-<img width="440" height="755" alt="Screenshot 2026-07-29 at 22 06 23" src="https://github.com/user-attachments/assets/68b8f186-e239-43c3-9e4e-1b463dfab27a" />
+### Recruiter dashboard
+Roles on the left, candidates in the middle (searchable and sortable), and the selected candidate's profile on the right — scores, matched and missing skills, a summary, a recommendation, and the full decision trail.
 
+<img src="docs/screenshots/dashboard.png" alt="Recruiter dashboard" width="900">
 
-<img width="751" height="803" alt="Screenshot 2026-07-29 at 21 14 39" src="https://github.com/user-attachments/assets/628d167a-a959-48e9-aa6f-34c2c75f8eef" />
+### Describe a project
+Describe a whole project in plain language. AI works out which roles it actually needs, drafts a reviewed job description for each one, and explains in plain terms why each role is needed.
 
-<img width="698" height="779" alt="Screenshot 2026-07-29 at 21 14 27" src="https://github.com/user-attachments/assets/d46f2363-22e1-4b7b-a728-5d784c0cbea1" />
+<img src="docs/screenshots/team-plan.png" alt="Describe a project: generated roles with job descriptions" width="900">
+
+<img src="docs/screenshots/team-plan-explanation.png" alt="Describe a project: the Explanation tab on each generated role" width="900">
+
+### Candidate application
+Candidates see the role and apply with just a resume — no account, no form.
+
+<img src="docs/screenshots/apply.png" alt="Candidate application page" width="560">
+
+### Recorded assessment
+Shortlisted candidates get a timed, in-browser recorded assessment with tailored questions.
+
+<img src="docs/screenshots/interview.png" alt="Recorded assessment page" width="560">
+
+### Sign in
+Recruiters sign in with Google and each get a private workspace.
+
+<img src="docs/screenshots/login.png" alt="Sign in with Google" width="560">
