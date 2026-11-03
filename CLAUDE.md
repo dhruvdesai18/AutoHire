@@ -153,7 +153,7 @@ Dockerfile          gunicorn --workers 4 --timeout 600
                                   push to main
 ```
 
-28 tests, all mocked (no network calls in CI). Run with
+34 tests, all mocked (no network calls in CI). Run with
 `source venv/bin/activate && python -m pytest -q`.
 
 ## Design identity
@@ -210,11 +210,17 @@ emails and OG meta tags.
 - **Gmail OAuth token expires every ~7 days.** The Gmail OAuth app is in
   Google's "Testing" publishing status (not "In production"), which caps
   refresh-token lifetime at 7 days regardless of use. This has broken
-  production at least twice in this project's history, each time as an
-  **uncaught exception inside the `/apply` POST handler** (a candidate who
-  scores well enough to be shortlisted gets a raw 500 instead of "Thanks for
-  applying" — the candidate record is still correctly created and scored,
-  just the email step throws). Symptom in logs:
+  production at least three times in this project's history. It used to
+  surface as an **uncaught exception inside the `/apply` POST handler** (a
+  shortlisted candidate got a raw 500 instead of "Thanks for applying").
+  **That's now handled:** `/apply` catches the send failure, logs it, stores
+  `email_error` on the candidate, and returns the normal success response;
+  the candidate stays at `interview_prep_ready`, which the dashboard shows as
+  "Email not sent" with a **Resend shortlist email** button
+  (`POST /candidates/<id>/resend-email`, owner/admin only). So an expired
+  token no longer hurts applicants, but **no shortlist emails go out until
+  the token is refreshed** — check Cloud Run logs for the error below.
+  Symptom in logs:
   `google.auth.exceptions.RefreshError: ('invalid_grant: Token has been
   expired or revoked.'...)`. **The fix**: re-run the interactive OAuth flow
   locally (back up the stale `token.json` first, don't just delete it blind —
@@ -270,7 +276,7 @@ This project has a strong established pattern, used consistently — follow
 it:
 
 1. Make the change.
-2. `python -m pytest -q` (all 28 should pass; add tests for new routes/logic
+2. `python -m pytest -q` (all 34 should pass; add tests for new routes/logic
    following `tests/conftest.py`'s mocking pattern).
 3. **Verify live, for real, before considering anything done.** This project
    does not trust "should work" — it runs the actual local dev server

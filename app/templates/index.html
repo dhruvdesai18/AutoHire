@@ -78,7 +78,7 @@
         uploaded: { label: "Screening", tag: "tag-neutral" },
         parsed: { label: "Screening", tag: "tag-neutral" },
         screening_passed: { label: "Screening passed", tag: "tag-neutral" },
-        interview_prep_ready: { label: "Prep ready", tag: "tag-neutral" },
+        interview_prep_ready: { label: "Email not sent", tag: "tag-accent" },
         interview_link_sent: { label: "Assessment sent", tag: "tag-neutral" },
         interview_audio_uploaded: { label: "Awaiting evaluation", tag: "tag-accent" },
         advanced: { label: "Advanced", tag: "tag-outline" },
@@ -426,7 +426,10 @@
         if (c.status === "interview_audio_uploaded") {
             return { title: "Evaluate the assessment", why: "Answers are recorded and waiting to be scored." };
         }
-        if (c.status === "interview_prep_ready" || c.status === "interview_link_sent") {
+        if (c.status === "interview_prep_ready") {
+            return { title: "Resend the shortlist email", why: "The candidate passed screening, but the email with their assessment link didn't go out." };
+        }
+        if (c.status === "interview_link_sent") {
             return { title: "Wait — assessment open", why: "Candidate has a 24-hour window to complete the recorded assessment." };
         }
         if (c.status === "expired") {
@@ -544,6 +547,13 @@
                 </div>
             ` : ""}
 
+            ${c.status === "interview_prep_ready" ? `
+                <div style="margin-top:16px;">
+                    <button class="btn btn-primary btn-block" id="btn-resend-email">Resend shortlist email</button>
+                    <div class="result" id="resend-result"></div>
+                </div>
+            ` : ""}
+
             <hr class="hr">
             <div class="kick" style="margin-bottom:12px;">Decision trail</div>
             ${trail.map((t) => `
@@ -563,6 +573,27 @@
 
         const evalBtn = document.getElementById("btn-evaluate");
         if (evalBtn) evalBtn.addEventListener("click", () => evaluateCandidate(c.candidate_id));
+
+        const resendBtn = document.getElementById("btn-resend-email");
+        if (resendBtn) resendBtn.addEventListener("click", () => resendShortlistEmail(c.candidate_id));
+    }
+
+    async function resendShortlistEmail(candidateId) {
+        const btn = document.getElementById("btn-resend-email");
+        const resultEl = document.getElementById("resend-result");
+        btn.disabled = true;
+        resultEl.innerHTML = '<div class="spinner">Sending…</div>';
+
+        const res = await fetch(`/candidates/${candidateId}/resend-email`, { method: "POST" });
+        const data = await res.json();
+        if (!res.ok) {
+            resultEl.innerHTML = `<div class="error">${escapeHtml(data.error)}</div>`;
+            showToast(data.error || "Could not send the email.", "error");
+            btn.disabled = false;
+            return;
+        }
+        showToast("Shortlist email sent.", "success");
+        await loadCandidates(selectedJobId);
     }
 
     async function evaluateCandidate(candidateId) {

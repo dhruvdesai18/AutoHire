@@ -139,3 +139,90 @@ def test_team_plan_page_redirects_when_not_logged_in(client):
 def test_team_plan_page_loads_when_logged_in(logged_in_client):
     res = logged_in_client.get("/jobs/team-plan")
     assert res.status_code == 200
+
+
+def _candidate_doc(**overrides):
+    data = {
+        "owner_id": "test-user-id",
+        "status": "interview_prep_ready",
+        "email": "someone@example.com",
+        "candidate_name": "Jordan Ellis",
+    }
+    data.update(overrides)
+    doc = MagicMock()
+    doc.exists = True
+    doc.to_dict.return_value = data
+    return doc
+
+
+def test_resend_email_requires_auth(client):
+    res = client.post("/candidates/some-id/resend-email")
+    assert res.status_code == 401
+
+
+def test_resend_email_rejects_non_owner(logged_in_client):
+    with patch("app.main.db") as mock_db, patch("app.main.send_email") as mock_send:
+        mock_db.collection.return_value.document.return_value.get.return_value = _candidate_doc(owner_id="someone-else")
+        res = logged_in_client.post("/candidates/c1/resend-email")
+        assert res.status_code == 403
+        mock_send.assert_not_called()
+
+
+def test_resend_email_rejects_candidate_not_waiting_on_email(logged_in_client):
+    with patch("app.main.db") as mock_db, patch("app.main.send_email") as mock_send:
+        mock_db.collection.return_value.document.return_value.get.return_value = _candidate_doc(status="interview_link_sent")
+        res = logged_in_client.post("/candidates/c1/resend-email")
+        assert res.status_code == 400
+        mock_send.assert_not_called()
+
+
+def test_resend_email_sends_and_marks_link_sent(logged_in_client):
+    with patch("app.main.db") as mock_db, patch("app.main.send_email") as mock_send:
+        ref = mock_db.collection.return_value.document.return_value
+        ref.get.return_value = _candidate_doc()
+        res = logged_in_client.post("/candidates/c1/resend-email")
+        assert res.status_code == 200
+        assert res.get_json()["status"] == "interview_link_sent"
+        mock_send.assert_called_once()
+        assert mock_send.call_args.args[0] == "someone@example.com"
+        updates = ref.update.call_args.args[0]
+        assert updates["status"] == "interview_link_sent"
+
+
+def test_resend_email_failure_returns_502_and_keeps_status(logged_in_client):
+    with patch("app.main.db") as mock_db, patch("app.main.send_email", side_effect=RuntimeError("token expired")):
+        ref = mock_db.collection.return_value.document.return_value
+        ref.get.return_value = _candidate_doc()
+        res = logged_in_client.post("/candidates/c1/resend-email")
+        assert res.status_code == 502
+        updates = ref.update.call_args.args[0]
+        assert "status" not in updates
+        assert "token expired" in updates["email_error"]
+
+
+def test_apply_does_not_500_when_shortlist_email_fails(client):
+    import io
+
+    job = MagicMock()
+    job.exists = True
+    job.to_dict.return_value = {"description": "A job", "owner_id": "owner-1"}
+    with patch("app.main.db") as mock_db, patch("app.main.bucket"), \
+         patch("app.main.extract_text", return_value="resume text"), \
+         patch("app.main.score_resume", return_value={
+             "candidate_name": "Jordan Ellis", "score": 95,
+             "matched_skills": [], "missing_skills": [], "reasoning": "good"}), \
+         patch("app.main.generate_interview_prep", return_value={
+             "email": "jordan@example.com", "questions": ["q1"]}), \
+         patch("app.main.send_email", side_effect=RuntimeError("invalid_grant")):
+        ref = mock_db.collection.return_value.document.return_value
+        ref.get.return_value = job
+        res = client.post(
+            "/apply/job-1",
+            data={"resume": (io.BytesIO(b"%PDF-1.4"), "resume.pdf")},
+            content_type="multipart/form-data",
+        )
+        assert res.status_code == 200
+        assert res.get_json() == {"status": "submitted"}
+        updates = [c.args[0] for c in ref.update.call_args_list]
+        assert any("invalid_grant" in u.get("email_error", "") for u in updates)
+        assert not any(u.get("status") == "interview_link_sent" for u in updates)

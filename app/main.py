@@ -381,19 +381,58 @@ def submit_application(job_id):
         }
     )
 
-    body = _build_interview_email_body(
-        candidate_ref.id, _first_name(score_result["candidate_name"])
-    )
-    send_email(prep_result["email"], "You've Been Shortlisted", body)
+    # The candidate is already scored and has questions at this point. If the
+    # email fails (e.g. the Gmail OAuth token expired), don't 500 the applicant —
+    # leave the record at interview_prep_ready so the recruiter can resend.
+    try:
+        _send_shortlist_email(
+            candidate_ref,
+            score_result["candidate_name"],
+            prep_result["email"],
+        )
+    except Exception as e:
+        app.logger.exception("Shortlist email failed for candidate %s", candidate_ref.id)
+        candidate_ref.update({"email_error": str(e)[:300]})
+
+    return jsonify({"status": "submitted"})
+
+
+def _send_shortlist_email(candidate_ref, candidate_name, to_email):
+    body = _build_interview_email_body(candidate_ref.id, _first_name(candidate_name))
+    send_email(to_email, "You've Been Shortlisted", body)
     candidate_ref.update(
         {
             "status": "interview_link_sent",
             "link_sent_at": firestore.SERVER_TIMESTAMP,
             "assessment_deadline": datetime.now(timezone.utc) + ASSESSMENT_WINDOW,
+            "email_error": firestore.DELETE_FIELD,
         }
     )
 
-    return jsonify({"status": "submitted"})
+
+@app.route("/candidates/<candidate_id>/resend-email", methods=["POST"])
+@require_login
+def resend_shortlist_email(candidate_id):
+    candidate_ref = db.collection("candidates").document(candidate_id)
+    candidate = candidate_ref.get()
+    if not candidate.exists:
+        return jsonify({"error": "Candidate not found"}), 404
+    candidate_data = candidate.to_dict()
+    if not _owns_or_admin(candidate_data.get("owner_id")):
+        return jsonify({"error": "Not authorized"}), 403
+    if candidate_data.get("status") != "interview_prep_ready" or not candidate_data.get("email"):
+        return jsonify({"error": "No unsent shortlist email for this candidate"}), 400
+
+    try:
+        _send_shortlist_email(
+            candidate_ref, candidate_data.get("candidate_name"), candidate_data["email"]
+        )
+    except Exception as e:
+        app.logger.exception("Resending shortlist email failed for candidate %s", candidate_id)
+        candidate_ref.update({"email_error": str(e)[:300]})
+        return jsonify({"error": "The email could not be sent. Try again shortly."}), 502
+
+    return jsonify({"status": "interview_link_sent"})
 
 
 def _build_interview_email_body(candidate_id, first_name):
