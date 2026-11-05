@@ -4,6 +4,8 @@
 .env
 *.key
 service-account*.json
+token.json.*
+client_secret*
 
 # Python
 venv/

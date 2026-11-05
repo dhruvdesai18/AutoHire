@@ -207,33 +207,44 @@ emails and OG meta tags.
 
 ## Known issues / gotchas (read before debugging)
 
-- **Gmail OAuth token expires every ~7 days.** The Gmail OAuth app is in
-  Google's "Testing" publishing status (not "In production"), which caps
-  refresh-token lifetime at 7 days regardless of use. This has broken
-  production at least three times in this project's history. It used to
-  surface as an **uncaught exception inside the `/apply` POST handler** (a
-  shortlisted candidate got a raw 500 instead of "Thanks for applying").
-  **That's now handled:** `/apply` catches the send failure, logs it, stores
-  `email_error` on the candidate, and returns the normal success response;
+- **Gmail OAuth token (history: it used to expire every ~7 days).** While
+  the OAuth consent screen was in "Testing" status, refresh tokens were
+  capped at 7 days, which broke production at least three times. **As of
+  2026-11-05 the consent screen (project `autohr-510611`, Google Auth
+  Platform -> Audience) is "In production"** and the token was re-issued
+  afterwards (Secret Manager `gmail-token` v2, Desktop client
+  `568278938456-8gdsog8ja93qf8ffk8hdq5dj8ss3ei91`, signed in as
+  `hr.autohire@gmail.com`), so it should no longer expire. The app is
+  unverified (it only requests `gmail.send` at sign-in, nothing is declared
+  under Data access, and verification is not required for this usage); that
+  only means the one-time consent screen shows "Google hasn't verified this
+  app" - click Advanced -> Go to AutoHire. A token is only long-lived if it
+  was issued *after* publishing, so never re-auth while the status says
+  Testing.
+  Failure handling: `/apply` catches a send failure, logs it, stores
+  `email_error` on the candidate and returns the normal success response;
   the candidate stays at `interview_prep_ready`, which the dashboard shows as
   "Email not sent" with a **Resend shortlist email** button
-  (`POST /candidates/<id>/resend-email`, owner/admin only). So an expired
-  token no longer hurts applicants, but **no shortlist emails go out until
-  the token is refreshed** — check Cloud Run logs for the error below.
-  Symptom in logs:
+  (`POST /candidates/<id>/resend-email`, owner/admin only). Symptom in logs if
+  the token ever dies again:
   `google.auth.exceptions.RefreshError: ('invalid_grant: Token has been
-  expired or revoked.'...)`. **The fix**: re-run the interactive OAuth flow
-  locally (back up the stale `token.json` first, don't just delete it blind —
-  `_get_credentials()` in `app/gmail.py` will throw on `creds.refresh()`
-  instead of falling through to re-auth if a stale-but-present token file
-  has an already-dead refresh token), then
+  expired or revoked.'...)`. **Re-auth procedure**: move the stale
+  `token.json` aside (`_get_credentials()` in `app/gmail.py` throws on
+  `creds.refresh()` instead of falling through to re-auth if a stale token
+  file is present), make sure `client_secret.json` is a **Desktop** client
+  from `autohr-510611` (a leftover file from the deleted project gives
+  `Error 401: deleted_client`; Google no longer lets you download an existing
+  client's secret, so use Clients -> the client -> Add secret -> Download
+  JSON), run `_get_credentials()` locally and sign in as
+  `hr.autohire@gmail.com`, then
   `gcloud secrets versions add gmail-token --data-file=token.json
-  --project=autohr-510611`, then `gcloud run deploy autohire --source . ...`
-  (or just push — CI/CD picks up the new secret version on next deploy; a
-  running revision does **not** auto-refresh a mounted secret). **The real
-  fix** nobody has done yet: move the Gmail OAuth consent screen to "In
-  production" status in Google Cloud Console, which removes the 7-day cap
-  entirely. Flag this to the user periodically; it's a known standing TODO.
+  --project=autohr-510611`, then roll a new revision (`gcloud run services
+  update autohire --region us-central1 --project autohr-510611
+  --update-labels redeploy=$(date +%s)`, or push) - a running revision does
+  **not** pick up a new secret version. Publishing the consent screen
+  requires the Branding page to be complete (logo, home/privacy/terms links
+  on the autohire domain, authorised domain, developer contact), otherwise
+  "Publish app" stays greyed out.
 - **Local `.env` can silently point at a deleted/wrong GCP project.** This
   already caused a confusing debugging session once: local ADC auth kept
   "failing" when the actual bug was `.env`'s `GCP_PROJECT_ID` still pointing
