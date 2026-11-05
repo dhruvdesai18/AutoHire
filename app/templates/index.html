@@ -71,6 +71,7 @@
 
     const ATS_THRESHOLD = {{ ats_threshold|tojson }};
     const INTERVIEW_THRESHOLD = {{ interview_threshold|tojson }};
+    const ASSESSMENT_HOURS = {{ assessment_hours|tojson }};
     const IS_ADMIN = {{ is_admin|tojson }};
     const CURRENT_USER_EMAIL = {{ user_email|tojson }};
 
@@ -78,6 +79,7 @@
         uploaded: { label: "Screening", tag: "tag-neutral" },
         parsed: { label: "Screening", tag: "tag-neutral" },
         screening_passed: { label: "Screening passed", tag: "tag-neutral" },
+        email_scheduled: { label: "Email scheduled", tag: "tag-neutral" },
         interview_prep_ready: { label: "Email not sent", tag: "tag-accent" },
         interview_link_sent: { label: "Assessment sent", tag: "tag-neutral" },
         interview_audio_uploaded: { label: "Awaiting evaluation", tag: "tag-accent" },
@@ -426,14 +428,17 @@
         if (c.status === "interview_audio_uploaded") {
             return { title: "Evaluate the assessment", why: "Answers are recorded and waiting to be scored." };
         }
+        if (c.status === "email_scheduled") {
+            return { title: "Shortlist email scheduled", why: `Goes out automatically${c.email_send_at ? " on " + fmtTime(c.email_send_at) : ""}. You can also send it now.` };
+        }
         if (c.status === "interview_prep_ready") {
             return { title: "Resend the shortlist email", why: "The candidate passed screening, but the email with their assessment link didn't go out." };
         }
         if (c.status === "interview_link_sent") {
-            return { title: "Wait — assessment open", why: "Candidate has a 24-hour window to complete the recorded assessment." };
+            return { title: "Wait — assessment open", why: `Candidate has a ${ASSESSMENT_HOURS}-hour window to complete the recorded assessment.` };
         }
         if (c.status === "expired") {
-            return { title: "Re-issue the link", why: "The 24-hour assessment window closed before a submission arrived." };
+            return { title: "Re-issue the link", why: `The ${ASSESSMENT_HOURS}-hour assessment window closed before a submission arrived.` };
         }
         if (c.status === "rejected") {
             return c.conversation_score != null
@@ -457,8 +462,12 @@
             });
         }
 
+        if (c.status === "email_scheduled" && c.email_send_at) {
+            steps.push({ time: fmtTime(c.email_send_at), label: "Shortlist email scheduled", detail: "Questions written from the resume. The email is queued to send at this time.", by: "Automatic" });
+        }
+
         if (c.link_sent_at) {
-            steps.push({ time: fmtTime(c.link_sent_at), label: "Shortlist email sent", detail: "Questions written from the resume. 24-hour window opened.", by: "Automatic · Gmail" });
+            steps.push({ time: fmtTime(c.link_sent_at), label: "Shortlist email sent", detail: `Questions written from the resume. ${ASSESSMENT_HOURS}-hour window opened.`, by: "Automatic · Gmail" });
         }
 
         if (c.status === "expired") {
@@ -547,9 +556,9 @@
                 </div>
             ` : ""}
 
-            ${c.status === "interview_prep_ready" ? `
+            ${c.status === "interview_prep_ready" || c.status === "email_scheduled" ? `
                 <div style="margin-top:16px;">
-                    <button class="btn btn-primary btn-block" id="btn-resend-email">Resend shortlist email</button>
+                    <button class="btn btn-primary btn-block" id="btn-resend-email">${c.status === "email_scheduled" ? "Send shortlist email now" : "Resend shortlist email"}</button>
                     <div class="result" id="resend-result"></div>
                 </div>
             ` : ""}

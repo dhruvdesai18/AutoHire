@@ -4,17 +4,21 @@ from functools import wraps
 from io import BytesIO
 
 from flask import Flask, Response, render_template, request, jsonify, send_file, session, redirect
+from google.api_core import exceptions as google_exceptions
 from google.auth.transport import requests as google_auth_requests
 from google.cloud import firestore
 from google.oauth2 import id_token as google_id_token
 
 from app.clients import bucket, db
 from app.config import (
+    ASSESSMENT_WINDOW_HOURS,
     ATS_SCORE_THRESHOLD,
     BASE_URL,
     GOOGLE_OAUTH_CLIENT_ID,
     INTERVIEW_SCORE_THRESHOLD,
+    SCHEDULER_SERVICE_ACCOUNT,
     SECRET_KEY,
+    SHORTLIST_EMAIL_DELAY_HOURS,
 )
 from app.document_ai import extract_text
 from app.gemini import (
@@ -26,7 +30,10 @@ from app.gemini import (
 from app.gmail import send_email
 from app.role_planner import generate_team_job_descriptions
 
-ASSESSMENT_WINDOW = timedelta(hours=24)
+ASSESSMENT_WINDOW = timedelta(hours=ASSESSMENT_WINDOW_HOURS)
+# While a due email is being sent it is leased to that run for this long, so an
+# overlapping scheduler run skips it, and a crashed run is retried afterwards.
+EMAIL_SEND_LEASE = timedelta(minutes=15)
 
 
 def _first_name(candidate_name):
@@ -123,6 +130,7 @@ def index():
         user_name=session.get("user_name"),
         user_email=session.get("user_email"),
         is_admin=session.get("is_admin", False),
+        assessment_hours=ASSESSMENT_WINDOW_HOURS,
     )
 
 
@@ -255,6 +263,7 @@ def list_job_candidates(job_id):
         d = c.to_dict()
         created_at = d.get("created_at")
         link_sent_at = d.get("link_sent_at")
+        email_send_at = d.get("email_send_at")
         candidates.append(
             {
                 "candidate_id": c.id,
@@ -271,6 +280,7 @@ def list_job_candidates(job_id):
                 "interview_evaluation_notes": d.get("interview_evaluation_notes"),
                 "created_at": created_at.isoformat() if created_at else None,
                 "link_sent_at": link_sent_at.isoformat() if link_sent_at else None,
+                "email_send_at": email_send_at.isoformat() if email_send_at else None,
             }
         )
     return jsonify({"candidates": candidates})
@@ -373,13 +383,21 @@ def submit_application(job_id):
         return jsonify({"status": "submitted"})
 
     prep_result = generate_interview_prep(parsed_text, job_description)
-    candidate_ref.update(
-        {
-            "email": prep_result["email"],
-            "interview_questions": prep_result["questions"],
-            "status": "interview_prep_ready",
-        }
-    )
+    delayed = SHORTLIST_EMAIL_DELAY_HOURS > 0
+    prep_update = {
+        "email": prep_result["email"],
+        "interview_questions": prep_result["questions"],
+        "status": "email_scheduled" if delayed else "interview_prep_ready",
+    }
+    if delayed:
+        prep_update["email_send_at"] = datetime.now(timezone.utc) + timedelta(
+            hours=SHORTLIST_EMAIL_DELAY_HOURS
+        )
+    candidate_ref.update(prep_update)
+
+    if delayed:
+        # /internal/send-due-emails (called by Cloud Scheduler) sends it later.
+        return jsonify({"status": "submitted"})
 
     # The candidate is already scored and has questions at this point. If the
     # email fails (e.g. the Gmail OAuth token expired), don't 500 the applicant —
@@ -406,8 +424,63 @@ def _send_shortlist_email(candidate_ref, candidate_name, to_email):
             "link_sent_at": firestore.SERVER_TIMESTAMP,
             "assessment_deadline": datetime.now(timezone.utc) + ASSESSMENT_WINDOW,
             "email_error": firestore.DELETE_FIELD,
+            "email_send_at": firestore.DELETE_FIELD,
         }
     )
+
+
+def _send_due_shortlist_emails():
+    """Send every scheduled shortlist email whose time has come. Returns
+    (sent, failed). A failed send drops the candidate back to
+    interview_prep_ready, so it shows as "Email not sent" with a Resend button
+    instead of being retried forever."""
+    now = datetime.now(timezone.utc)
+    sent = failed = 0
+    scheduled = db.collection("candidates").where("status", "==", "email_scheduled").stream()
+    for snap in scheduled:
+        data = snap.to_dict()
+        send_at = data.get("email_send_at")
+        if not send_at or send_at > now:
+            continue
+        ref = snap.reference
+        try:
+            ref.update(
+                {"email_send_at": now + EMAIL_SEND_LEASE},
+                option=db.write_option(last_update_time=snap.update_time),
+            )
+        except google_exceptions.FailedPrecondition:
+            continue  # an overlapping run already claimed this one
+        try:
+            _send_shortlist_email(ref, data.get("candidate_name"), data["email"])
+            sent += 1
+        except Exception as e:
+            app.logger.exception("Scheduled shortlist email failed for candidate %s", ref.id)
+            ref.update({"status": "interview_prep_ready", "email_error": str(e)[:300]})
+            failed += 1
+    return sent, failed
+
+
+def _is_scheduler_request():
+    """True only for a Cloud Scheduler call carrying a Google-signed OIDC token
+    for our audience (the service URL) from the designated service account."""
+    header = request.headers.get("Authorization", "")
+    if not SCHEDULER_SERVICE_ACCOUNT or not header.startswith("Bearer "):
+        return False
+    try:
+        claims = google_id_token.verify_oauth2_token(
+            header[len("Bearer "):], google_auth_requests.Request(), audience=BASE_URL
+        )
+    except ValueError:
+        return False
+    return bool(claims.get("email_verified")) and claims.get("email") == SCHEDULER_SERVICE_ACCOUNT
+
+
+@app.route("/internal/send-due-emails", methods=["POST"])
+def send_due_emails():
+    if not _is_scheduler_request():
+        return jsonify({"error": "Not authenticated"}), 401
+    sent, failed = _send_due_shortlist_emails()
+    return jsonify({"sent": sent, "failed": failed})
 
 
 @app.route("/candidates/<candidate_id>/resend-email", methods=["POST"])
@@ -420,7 +493,7 @@ def resend_shortlist_email(candidate_id):
     candidate_data = candidate.to_dict()
     if not _owns_or_admin(candidate_data.get("owner_id")):
         return jsonify({"error": "Not authorized"}), 403
-    if candidate_data.get("status") != "interview_prep_ready" or not candidate_data.get("email"):
+    if candidate_data.get("status") not in ("interview_prep_ready", "email_scheduled") or not candidate_data.get("email"):
         return jsonify({"error": "No unsent shortlist email for this candidate"}), 400
 
     try:
@@ -439,7 +512,7 @@ def _build_interview_email_body(candidate_id, first_name):
     return (
         f"Hello {first_name},\n\n"
         "Thanks for applying! You've been shortlisted for this role. Please "
-        "complete your assessment within 24 hours using the link below:\n\n"
+        f"complete your assessment within {ASSESSMENT_WINDOW_HOURS} hours using the link below:\n\n"
         f"{BASE_URL}/interview/{candidate_id}\n\n"
         "Best of luck,\nAutoHire"
     )

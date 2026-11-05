@@ -62,8 +62,11 @@ final decision (or publish a role, or evaluate a finished assessment).
    extracts the candidate's email and writes 5 questions tailored to their
    resume and the role.
 7. **Send shortlist email** — Gmail API sends a short personalized email
-   with a link to the assessment and a 24-hour deadline (enforced
-   server-side via `assessment_deadline` / `_is_expired()`).
+   with a link to the assessment and a deadline of `ASSESSMENT_WINDOW_HOURS`
+   (default 48, enforced server-side via `assessment_deadline` /
+   `_is_expired()`; the clock starts when the email is *sent*). If
+   `SHORTLIST_EMAIL_DELAY_HOURS` > 0 the email is held back — see "Delayed
+   shortlist email" under Known issues.
 8. **Candidate takes the assessment** (`/interview/<candidate_id>`) — a
    30-minute overall window, 2 tries per question, 90 seconds per try,
    in-browser recording via MediaRecorder. Partial completion is fine;
@@ -153,7 +156,7 @@ Dockerfile          gunicorn --workers 4 --timeout 600
                                   push to main
 ```
 
-34 tests, all mocked (no network calls in CI). Run with
+42 tests, all mocked (no network calls in CI). Run with
 `source venv/bin/activate && python -m pytest -q`.
 
 ## Design identity
@@ -245,6 +248,21 @@ emails and OG meta tags.
   requires the Branding page to be complete (logo, home/privacy/terms links
   on the autohire domain, authorised domain, developer contact), otherwise
   "Publish app" stays greyed out.
+- **Delayed shortlist email (temporary, so applicants don't get an instant
+  automated reply).** `SHORTLIST_EMAIL_DELAY_HOURS` (Cloud Run env var; set to
+  25 on 2026-11-05, code default 0 = send immediately). When > 0, `/apply`
+  stores `status: email_scheduled` + `email_send_at` instead of sending. A
+  **Cloud Scheduler** job `autohire-send-due-emails` (us-central1, every 10
+  min) POSTs `/internal/send-due-emails` with an OIDC token for the service
+  account in `SCHEDULER_SERVICE_ACCOUNT`; the endpoint verifies the token
+  (audience = `BASE_URL`) and sends every due email (`_send_due_shortlist_emails`).
+  A failed send drops the candidate to `interview_prep_ready` ("Email not
+  sent" + Resend button) rather than retrying forever; the recruiter can also
+  click **Send shortlist email now** on a scheduled candidate. **To go back to
+  normal:** `gcloud run services update autohire --region us-central1
+  --project autohr-510611 --update-env-vars SHORTLIST_EMAIL_DELAY_HOURS=0`
+  (applicants already scheduled still get their email at their original time;
+  the scheduler job can then be left running or deleted).
 - **Local `.env` can silently point at a deleted/wrong GCP project.** This
   already caused a confusing debugging session once: local ADC auth kept
   "failing" when the actual bug was `.env`'s `GCP_PROJECT_ID` still pointing
@@ -287,7 +305,7 @@ This project has a strong established pattern, used consistently — follow
 it:
 
 1. Make the change.
-2. `python -m pytest -q` (all 34 should pass; add tests for new routes/logic
+2. `python -m pytest -q` (all 42 should pass; add tests for new routes/logic
    following `tests/conftest.py`'s mocking pattern).
 3. **Verify live, for real, before considering anything done.** This project
    does not trust "should work" — it runs the actual local dev server
